@@ -82,15 +82,6 @@ def collapse_last_dimension(t: np.ndarray, v: np.ndarray) -> np.ndarray:
 
 
 def create_weight_vector(f: float) -> np.ndarray:
-    """
-    Create a 2-element numpy array from a float value.
-    
-    Args:
-        f: Float value
-    
-    Returns:
-        numpy array of shape (2,) with values [1-f, f]
-    """
     return np.array([1 - f, f])
 
 
@@ -209,10 +200,10 @@ def bilinear_interpolate_shift(img: np.ndarray, dx: float, dy: float) -> np.ndar
     result = img.copy()
     
     # First interpolate along the x-axis (axis 0 - rows)
-    result = interpolate_shift_dimension(result, axis=0, shift=dx)
+    result = interpolate_shift_dimension(result, axis=1, shift=dx)
     
     # Then interpolate along the y-axis (axis 1 - columns)
-    result = interpolate_shift_dimension(result, axis=1, shift=dy)
+    result = interpolate_shift_dimension(result, axis=0, shift=dy)
     
     return result
 
@@ -267,7 +258,7 @@ def interactive_shift(img: np.ndarray):
         new_dy = drag_start_shift[1] + dy
         
         # Apply shift and update display
-        shifted_img = bilinear_interpolate_shift(original_img, new_dy, new_dx)
+        shifted_img = bilinear_interpolate_shift(original_img, new_dx, new_dy)
         im_display.set_array(shifted_img)
         fig.canvas.draw_idle()
     
