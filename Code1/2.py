@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import click
 
 
-def load_image(path: str) -> np.ndarray:
+def load_image(path: str, require_rgb: bool = False) -> np.ndarray:
     """
     Load a JPG image file and return it as a numpy array.
     
@@ -19,22 +19,29 @@ def load_image(path: str) -> np.ndarray:
     """
     img = Image.open(path)
     # Convert to RGB if necessary (handles RGBA, P, L modes)
-    if img.mode != 'RGB':
+    if img.mode != 'RGB' and require_rgb:
         img = img.convert('RGB')
     return np.array(img)
 
 
-def display_image(img: np.ndarray):
+def display_image(img: np.ndarray, scale: float = 2.0):
     """
     Display an image tensor as a matplotlib figure.
-    
+
     Args:
-        img: numpy array with shape (height, width, 3) for RGB images,
-             or (height, width) for grayscale images. Values should be in 
-             range [0, 255] with dtype uint8.
+        img: numpy array with shape (H, W, 3) or (H, W),
+             dtype uint8, values in [0, 255].
+        scale: visual scaling factor (e.g. 2.0, 4.0)
     """
+    h, w = img.shape[:2]
+
+    # Matplotlib uses inches; default DPI is usually 100
+    dpi = plt.rcParams.get('figure.dpi', 100)
+
+    fig = plt.figure(figsize=(w * scale / dpi, h * scale / dpi), dpi=dpi)
     plt.imshow(img)
-    plt.axis('off')  # Hide axes for cleaner display
+    plt.axis('off')
+    plt.tight_layout(pad=0)
     plt.show()
 
 
@@ -319,11 +326,23 @@ def bottom_half_circle_mask(sx: int, sy: int, mx: int, my: int, r: float) -> np.
     mask = circle & bottom_half
     return mask.astype(np.uint8)
 
+def get_inverse_rot_matrix(angle: float) -> np.ndarray:
+    return np.stack([np.array([np.cos(angle), np.sin(angle)]), np.array([-np.sin(angle), np.cos(angle)])])
 
 def rot(t: np.ndarray, angle: float) -> np.ndarray:
-    inverse_rot_mat = np.stack(np.array([np.cos(angle), np.sin(angle)]), np.array([-np.sin(angle), np.cos(angle)]))
-    print(inverse_rot_mat.shape)
-    print(inverse_rot_mat)
+    inverse_rot_mat = get_inverse_rot_matrix(angle)
+    dest_indices_tensor = np.indices(t.shape)
+
+    source_indices_tensor = np.einsum('ij,jxy->ixy', inverse_rot_mat, dest_indices_tensor)
+    
+    source_indices_tensor: np.ndarray = np.rint(source_indices_tensor).astype(np.int64)
+    
+    for dim in range(2):
+        source_indices_tensor[dim,...] %= t.shape[dim]
+    
+    
+    return t[source_indices_tensor[0], source_indices_tensor[1]]
+
 
 @click.group()
 class cli:
@@ -345,13 +364,19 @@ def brad():
     img = load_image("instructions/Brad.jpg")
     shape = img.shape
     mask = bottom_half_circle_mask(shape[0], shape[1], 250, 200, 140)
-    mask = mask[..., np.newaxis]
     display_image(mask)
-    display_image(img*mask)
+    
+    img = img*mask
+
+    for frac in [3, 4, 2]: #60, 45, 90
+        display_image(rot(img, np.pi/frac))
 
 @cli.command("rotate")
 def rotate():
-    rot(None, 0.4)
+    img = load_image("instructions/Brad.jpg")
+    for i in range(4):
+        res = rot(img, 0.2*i)
+        display_image(res)
     
 
 if __name__ == "__main__":
