@@ -260,7 +260,7 @@ def interactive_shift(img: np.ndarray):
         # Note: event.xdata/ydata are in data coordinates (pixel coordinates)
         # For images, y-axis is inverted, so we need to account for that
         dx = event.xdata - drag_start_pos[0]  # horizontal shift
-        dy = event.ydata - drag_start_pos[0]  # horizontal shift
+        dy = event.ydata - drag_start_pos[1]  # horizontal shift
         
         # Calculate total shift: base shift from previous drags + current drag offset
         new_dx = drag_start_shift[0] + dx
@@ -279,7 +279,7 @@ def interactive_shift(img: np.ndarray):
         if event.inaxes == ax and event.button == 1 and event.xdata is not None and event.ydata is not None:
             # Calculate final shift and update current state
             dx = event.xdata - drag_start_pos[0]
-            dy = event.ydata - drag_start_pos[0]
+            dy = event.ydata - drag_start_pos[1]
             current_dx = drag_start_shift[0] + dx
             current_dy = drag_start_shift[1] + dy
         
