@@ -2,6 +2,7 @@
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
+import click
 
 
 def load_image(path: str) -> np.ndarray:
@@ -291,6 +292,67 @@ def interactive_shift(img: np.ndarray):
     plt.show()
 
 
-m = load_image("instructions/scotland.jpg")
-print(m.shape)
-interactive_shift(m)
+def bottom_half_circle_mask(sx: int, sy: int, mx: int, my: int, r: float) -> np.ndarray:
+    """
+    Create a binary (sx, sy) mask with ones in the bottom half of a circle.
+
+    Parameters
+    ----------
+    sx, sy : int
+        Image dimensions.
+    mx, my : float or int
+        Circle center.
+    r : float or int
+        Circle radius.
+
+    Returns
+    -------
+    mask : ndarray, shape (sx, sy), dtype=np.uint8
+        Binary mask (0 or 1).
+    """
+    y, x = np.ogrid[:sx, :sy]
+
+    dist_sq = (x - mx)**2 + (y - my)**2
+    circle = dist_sq <= r**2
+    bottom_half = y >= my
+
+    mask = circle & bottom_half
+    return mask.astype(np.uint8)
+
+
+def rot(t: np.ndarray, angle: float) -> np.ndarray:
+    inverse_rot_mat = np.stack(np.array([np.cos(angle), np.sin(angle)]), np.array([-np.sin(angle), np.cos(angle)]))
+    print(inverse_rot_mat.shape)
+    print(inverse_rot_mat)
+
+@click.group()
+class cli:
+    pass
+
+@cli.command("interactive")
+def interactive():
+    interactive_shift(load_image("instructions/scotland.jpg"))
+
+
+@cli.command("cameraman")
+def cameraman():
+    img = load_image("instructions/Cameraman.jpg")
+    display_image(bilinear_interpolate_shift(img, 170.3, 130.8))
+
+
+@cli.command("brad")
+def brad():
+    img = load_image("instructions/Brad.jpg")
+    shape = img.shape
+    mask = bottom_half_circle_mask(shape[0], shape[1], 250, 200, 140)
+    mask = mask[..., np.newaxis]
+    display_image(mask)
+    display_image(img*mask)
+
+@cli.command("rotate")
+def rotate():
+    rot(None, 0.4)
+    
+
+if __name__ == "__main__":
+    cli()
