@@ -4,7 +4,6 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import click
 
-
 def load_image(path: str, require_rgb: bool = False) -> np.ndarray:
     """
     Load a JPG image file and return it as a numpy array.
@@ -23,8 +22,32 @@ def load_image(path: str, require_rgb: bool = False) -> np.ndarray:
         img = img.convert('RGB')
     return np.array(img)
 
+def display_images_side_by_side(img1: np.ndarray, img2: np.ndarray, titles=("Image 1", "Image 2"), fullscreen: bool = True):
+    """
+    Display two images side-by-side.
 
-def display_image(img: np.ndarray, scale: float = 2.0):
+    Args:
+        img1, img2: numpy arrays of shape (H, W) or (H, W, 3)
+        titles: optional titles for the images
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    if fullscreen:
+        mng = plt.get_current_fig_manager()
+        mng.full_screen_toggle()
+
+    axes[0].imshow(img1, interpolation='nearest')
+    axes[0].set_title(titles[0])
+    axes[0].axis('off')
+
+    axes[1].imshow(img2, interpolation='nearest')
+    axes[1].set_title(titles[1])
+    axes[1].axis('off')
+
+    plt.tight_layout()
+    plt.show()
+
+
+def display_image(img: np.ndarray, scale: float = 2.0, fullscreen: bool = False):
     """
     Display an image tensor as a matplotlib figure.
 
@@ -39,6 +62,10 @@ def display_image(img: np.ndarray, scale: float = 2.0):
     dpi = plt.rcParams.get('figure.dpi', 100)
 
     fig = plt.figure(figsize=(w * scale / dpi, h * scale / dpi), dpi=dpi)
+    if fullscreen:
+        mng = plt.get_current_fig_manager()
+        mng.full_screen_toggle()
+
     plt.imshow(img)
     plt.axis('off')
     plt.tight_layout(pad=0)
@@ -74,21 +101,6 @@ def add_shifted_dimension(tensor: np.ndarray, diff: tuple) -> np.ndarray:
     return result
 
 
-def collapse_last_dimension(t: np.ndarray, v: np.ndarray) -> np.ndarray:
-    """
-    Collapse the last dimension of a tensor by computing inner products with a vector.
-    
-    Args:
-        t: Input tensor of shape (dims..., n) where n is the size of the last dimension
-        v: Vector of length n
-    
-    Returns:
-        Tensor of shape (dims...) where each cell (x1, ..., xk) contains the inner
-        product of t[x1, ..., xk, :] with v.
-    """
-    return np.einsum('...i,i->...', t, v)
-
-
 def create_weight_vector(f: float) -> np.ndarray:
     return np.array([1 - f, f])
 
@@ -118,6 +130,15 @@ def normalize_shift(shift: float) -> tuple[int, float]:
     
     return shift_int, shift_frac
 
+def interpolate_last_dimention(t: np.ndarray, shift_frac: float) -> np.ndarray:
+    """
+    Assumes the last dimention of the tensor is of length 2, and collapses it by interpolating between the two values in it,
+        the interpolation is weighted according to `shift_frac`.
+    
+        If shift_frac is 0, output will be the same as `t[...,0]` and if it is 1, output will be `t[...,1]`
+    """
+    assert t.shape[-1] == 2
+    return np.einsum('...i,i->...', t, create_weight_vector(shift_frac)) # Collapse last dimention into inner product.
 
 def interpolate_shift_dimension_fractional(tensor: np.ndarray, axis: int, shift_frac: float) -> np.ndarray:
     """
@@ -148,7 +169,7 @@ def interpolate_shift_dimension_fractional(tensor: np.ndarray, axis: int, shift_
         shift_tuple = [0] * tensor.ndim
         shift_tuple[axis] = 1
         result = add_shifted_dimension(result, tuple(shift_tuple))
-        result = collapse_last_dimension(result, create_weight_vector(shift_frac))
+        result = interpolate_last_dimention(result, shift_frac)
     
     # Convert back to original dtype, handling uint8 overflow properly
     if original_dtype == np.uint8:
@@ -329,21 +350,61 @@ def bottom_half_circle_mask(sx: int, sy: int, mx: int, my: int, r: float) -> np.
 def get_inverse_rot_matrix(angle: float) -> np.ndarray:
     return np.stack([np.array([np.cos(angle), np.sin(angle)]), np.array([-np.sin(angle), np.cos(angle)])])
 
-def rot(t: np.ndarray, angle: float) -> np.ndarray:
+def interpolated_advanced_indexing(t: np.ndarray, source_indices_tensor: np.ndarray) -> np.ndarray:
+    sx, sy = t.shape
+    assert source_indices_tensor.shape == (2, sx, sy)
+
+    intr_edge_images_ls: list[np.ndarray] = []
+    for x_rounding in [np.floor, np.ceil]:
+        y_edge_images: list[np.ndarray] = []
+        for y_rounding in [np.floor, np.ceil]:
+            image_indices = np.stack([
+                x_rounding(source_indices_tensor[0, ...]),
+                y_rounding(source_indices_tensor[1, ...])
+            ], axis=0).astype(np.uint64)
+            print(image_indices.shape)
+            assert image_indices.shape == (2, sx, sy)
+
+            # Deal with out of bounds values by cycling ends:
+            for dim in range(image_indices.shape[0]):
+                image_indices[dim,...] %= image_indices.shape[1+dim]
+
+            edge_img = t[image_indices[0], image_indices[1]]
+            assert edge_img.shape == (sx, sy)
+            
+            y_edge_images.append(edge_img)
+        
+        intr_edge_images_ls.append(np.stack([y_edge_images[0], y_edge_images[1]], axis=-1))
+
+    intr_edge_images = np.stack([intr_edge_images_ls[0], intr_edge_images_ls[1]], axis=-1)
+    assert intr_edge_images.shape == (sx, sy, 2, 2)
+    
+    intr_source_weights = np.stack([1-(source_indices_tensor%1), source_indices_tensor%1], axis=0)
+    assert intr_source_weights.shape == (2, 2, sx, sy)
+
+    return np.einsum('...ij,ji...->...', intr_edge_images, intr_source_weights)
+
+def rot(t: np.ndarray, angle: float, intr_factions: bool) -> np.ndarray:
+    sx, sy = t.shape # For asserts
+    
     inverse_rot_mat = get_inverse_rot_matrix(angle)
     dest_indices_tensor = np.indices(t.shape)
+    assert dest_indices_tensor.shape == (2, sx, sy)
 
     source_indices_tensor = np.einsum('ij,jxy->ixy', inverse_rot_mat, dest_indices_tensor)
-    
-    source_indices_tensor: np.ndarray = np.rint(source_indices_tensor).astype(np.int64)
-    
-    for dim in range(2):
-        source_indices_tensor[dim,...] %= t.shape[dim]
-    
-    
-    return t[source_indices_tensor[0], source_indices_tensor[1]]
+    assert source_indices_tensor.shape == (2, sx, sy)
 
-
+    if intr_factions:
+        return interpolated_advanced_indexing(t, source_indices_tensor)
+    else:
+        source_indices_tensor: np.ndarray = np.rint(source_indices_tensor).astype(np.int64)
+        
+        # Deal with out of bounds values by cycling ends:
+        for dim in range(2):
+            source_indices_tensor[dim,...] %= t.shape[dim]
+            
+        return t[source_indices_tensor[0], source_indices_tensor[1]]
+   
 @click.group()
 class cli:
     pass
@@ -356,7 +417,7 @@ def interactive():
 @cli.command("cameraman")
 def cameraman():
     img = load_image("instructions/Cameraman.jpg")
-    display_image(bilinear_interpolate_shift(img, 170.3, 130.8))
+    display_image(bilinear_interpolate_shift(img, 170.3, 130.8), fullscreen=True)
 
 
 @cli.command("brad")
@@ -368,15 +429,13 @@ def brad():
     
     img = img*mask
 
-    for frac in [3, 4, 2]: #60, 45, 90
-        display_image(rot(img, np.pi/frac))
+    for angle in [np.pi/frac for frac in [3, 4, 2]]: #60, 45, 90
+        display_images_side_by_side(rot(img, angle, False), rot(img, angle, True))
 
 @cli.command("rotate")
 def rotate():
     img = load_image("instructions/Brad.jpg")
-    for i in range(4):
-        res = rot(img, 0.2*i)
-        display_image(res)
+    display_images_side_by_side(rot(img, 0.3, False), rot(img, 0.3, True))
     
 
 if __name__ == "__main__":
