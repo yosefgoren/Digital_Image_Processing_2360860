@@ -13,6 +13,14 @@ def loadbob():
 
     return np.moveaxis(rawbob, -1, 0)   # (Hight, Width, Time) -> (Time, Hight, Width)
 
+MANUAL_MODE_HELP_STR = """\
+Manual mode: use keyboard to step through frames.
+Keys:
+- Right arrow / 'n' : next frame
+- Left arrow  / 'p' : previous frame
+- 'q'               : quit/close window
+"""
+
 def show_ani(ani_mat, display_interval: int, sampling_ratio: float = 1.0, manual: bool = False):
     T, H, W = ani_mat.shape
 
@@ -23,13 +31,7 @@ def show_ani(ani_mat, display_interval: int, sampling_ratio: float = 1.0, manual
     ax.axis("off")
 
     if manual:
-        print("""\
-Manual mode: use keyboard to step through frames.
-Keys:
-- Right arrow / 'n' : next frame
-- Left arrow  / 'p' : previous frame
-- 'q'               : quit/close window
-""")
+        print(MANUAL_MODE_HELP_STR)
         state = {"t": 0}
 
         def on_key(event):
@@ -42,7 +44,7 @@ Keys:
                 return
             
             next_frame_index = state["t"]
-            print(f"Show frame number: {next_frame_index}")
+            print(f"Showing frame number: {next_frame_index}")
             im.set_array(ani_mat[next_frame_index])
             fig.canvas.draw_idle()
 
@@ -64,16 +66,16 @@ Keys:
 
 @click.command("showbob")
 @click.argument("display_interval", type=int, default=20)
-@click.argument("diff_first", type=bool, default=False)
 @click.argument("sampling_ratio", type=float, default=1.0)
+@click.option("--diff-first", is_flag=True, default=False, help="Subtract first frame before display.")
 @click.option("--manual", is_flag=True, help="Step through frames manually with keyboard.")
-def showbob(display_interval: int, diff_first: bool, sampling_ratio: float, manual: bool):
+def showbob(display_interval: int, sampling_ratio: float, diff_first: bool, manual: bool):
     ani_mat = loadbob()
     
     if diff_first:
         ani_mat = ani_mat - ani_mat[0]
 
-    show_ani(ani_mat, display_interval, sampling_ratio=sampling_ratio, manual=manual)
+    show_ani(ani_mat, display_interval, sampling_ratio, manual)
 
 if __name__ == "__main__":
     showbob()
