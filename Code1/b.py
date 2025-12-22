@@ -1,39 +1,45 @@
+#!/usr/bin/python3
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.io import loadmat
 from matplotlib.animation import FuncAnimation
+import click
 
 def loadbob():
-    mat = loadmat("instructions/SpongeBob.mat")        # inspect keys if unsure
-    rawbob = mat["SpongeBob"]                   # shape (T, H, W) or (H, W, T)
-    print(rawbob.shape)
+    mat = loadmat("instructions/SpongeBob.mat")
+    rawbob = mat["SpongeBob"]
+    assert rawbob.ndim == 3
 
-    assert vol.ndim == 3
+    return np.moveaxis(rawbob, -1, 0)   # (Hight, Width, Time) -> (Time, Hight, Width)
 
-    # ---- explicitly choose time axis ----
-    # assume time is the LAST dimension (H, W, T)
-    vol = np.moveaxis(vol, -1, 0)   # -> (T, H, W)
-
-    return vol
-
-
-
-
-def showbob():
-    bob = loadbob()
-
-    T, H, W = bob.shape
+def show_ani(ani_mat, interval: int):
+    T, H, W = ani_mat.shape
 
     fig, ax = plt.subplots()
-    im = ax.imshow(bob[0], cmap="gray", animated=True)
+    # Use global min/max so contrast is not determined by the (zero) first frame
+    vmin, vmax = ani_mat.min(), ani_mat.max()
+    im = ax.imshow(ani_mat[0], cmap="gray", animated=True, vmin=vmin, vmax=vmax)
     ax.axis("off")
 
     def update(t):
-        im.set_array(bob[t])
+        print(t)
+        im.set_array(ani_mat[t])
         return (im,)
 
-    ani = FuncAnimation(fig, update, frames=T, interval=20)
+    ani = FuncAnimation(fig, update, frames=T, interval=interval)
     plt.show()
 
 
-showbob()
+@click.command("showbob")
+@click.argument("interval", type=int, default=20)
+@click.argument("diff_first", type=bool, default=False)
+def showbob(interval: int, diff_first: bool):
+    ani_mat = loadbob()
+    
+    if diff_first:
+        ani_mat = ani_mat - ani_mat[0]
+    
+    show_ani(ani_mat, interval)
+
+if __name__ == "__main__":
+    showbob()
