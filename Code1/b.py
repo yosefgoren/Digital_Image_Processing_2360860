@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.io import loadmat
 from matplotlib.animation import FuncAnimation
 import click
+import math
 
 def loadbob():
     mat = loadmat("instructions/SpongeBob.mat")
@@ -12,7 +13,7 @@ def loadbob():
 
     return np.moveaxis(rawbob, -1, 0)   # (Hight, Width, Time) -> (Time, Hight, Width)
 
-def show_ani(ani_mat, interval: int, manual: bool = False):
+def show_ani(ani_mat, display_interval: int, sampling_ratio: float = 1.0, manual: bool = False):
     T, H, W = ani_mat.shape
 
     fig, ax = plt.subplots()
@@ -22,11 +23,13 @@ def show_ani(ani_mat, interval: int, manual: bool = False):
     ax.axis("off")
 
     if manual:
-        # Manual mode: use keyboard to step through frames.
-        # Keys:
-        # - Right arrow / 'n' : next frame
-        # - Left arrow  / 'p' : previous frame
-        # - 'q'               : quit/close window
+        print("""\
+Manual mode: use keyboard to step through frames.
+Keys:
+- Right arrow / 'n' : next frame
+- Left arrow  / 'p' : previous frame
+- 'q'               : quit/close window
+""")
         state = {"t": 0}
 
         def on_key(event):
@@ -45,26 +48,32 @@ def show_ani(ani_mat, interval: int, manual: bool = False):
 
         fig.canvas.mpl_connect("key_press_event", on_key)
     else:
-        def update(next_frame_index: int):
-            print(f"Showing frame number: {next_frame_index}")
-            im.set_array(ani_mat[next_frame_index])
+        # In sampled auto mode, show every `sampling_ratio`-th frame and slow the refresh.
+        effective_interval = display_interval * sampling_ratio
+        num_steps = int(T / sampling_ratio)
+
+        def update(step_idx: int):
+            frame_idx = min(math.floor(step_idx * sampling_ratio), T - 1)
+            print(f"Showing frame number: {frame_idx}")
+            im.set_array(ani_mat[frame_idx])
             return (im,)
 
-        anim = FuncAnimation(fig, update, frames=T, interval=interval)
+        anim = FuncAnimation(fig, update, frames=num_steps, interval=effective_interval)
     plt.show()
 
 
 @click.command("showbob")
-@click.argument("interval", type=int, default=20)
+@click.argument("display_interval", type=int, default=20)
 @click.argument("diff_first", type=bool, default=False)
+@click.argument("sampling_ratio", type=float, default=1.0)
 @click.option("--manual", is_flag=True, help="Step through frames manually with keyboard.")
-def showbob(interval: int, diff_first: bool, manual: bool):
+def showbob(display_interval: int, diff_first: bool, sampling_ratio: float, manual: bool):
     ani_mat = loadbob()
     
     if diff_first:
         ani_mat = ani_mat - ani_mat[0]
 
-    show_ani(ani_mat, interval, manual=manual)
+    show_ani(ani_mat, display_interval, sampling_ratio=sampling_ratio, manual=manual)
 
 if __name__ == "__main__":
     showbob()
