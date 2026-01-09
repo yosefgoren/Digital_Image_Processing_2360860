@@ -1,3 +1,4 @@
+# 1
 ## Part a:
 
 
@@ -60,3 +61,26 @@ $$
 = \frac{1}{18}\left[\frac{Samples}{\frac{Cycle}{19}}\right]
 = \frac{19}{18}\left[\frac{Samples}{Cycle}\right]
 $$
+
+# 2
+
+# 3
+
+## Part d:
+We can run the algorithm with the specified initial vectors with:
+```bash
+./3.py quantize-steps instructions/colorful.tif max_lloyed_iv.json
+```
+And see the following results:
+![](3_d_1.png)
+
+And if we let it randomize the same amount of initial vectors (9) with:
+```bash
+./3.py quantize-steps instructions/colorful.tif 9
+```
+We see the following results:
+![](3_d_2.png)
+
+So it looks like:
+1. the initial distortion with our specified set of vectors is much higher.
+2. after many iterations, they converge to very similar results (both visually and numerically).

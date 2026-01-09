@@ -7,7 +7,7 @@ import click
 import matplotlib.pyplot as plt
 from pathlib import Path
 import math
-
+import json
 
 Array = np.ndarray
 
@@ -142,6 +142,35 @@ def max_lloyd_progressive(
 
     return images, distortions, codebook
 
+def validate_init_codebook(
+    codebook: Array | None,
+    levels: int,
+) -> None:
+    if codebook is None:
+        return
+    assert codebook.shape == (levels, 3)
+
+def parse_levels_or_codebook(
+    value: str,
+) -> Tuple[int, Array | None]:
+    try:
+        levels = int(value)
+        assert levels > 0
+        return levels, None
+    except ValueError:
+        path = Path(value)
+        assert path.exists() and path.suffix == ".json"
+
+        with path.open("r") as f:
+            raw = json.load(f)
+
+        codebook = np.asarray(raw, dtype=np.float64)
+        assert codebook.ndim == 2 and codebook.shape[1] == 3
+        assert np.all((0.0 <= codebook) & (codebook <= 1.0))
+
+        codebook = codebook * 255.0
+
+        return codebook.shape[0], codebook
 
 # * * * Usage * * * 
 
@@ -243,15 +272,16 @@ def quantize(
 
     title = f"levels={levels}, iterations={len(distortion)}"
     show_side_by_side(image, dataout, title=title)
+
 @cli.command(name="quantize-steps")
 @click.argument("image_path", type=click.Path(exists=True, dir_okay=False))
-@click.option("--levels", default=8, show_default=True, type=int)
+@click.argument("levels_or_codebook")
 @click.option("--max-iter", default=10, show_default=True, type=int)
 @click.option("--meps", default=None, type=float)
 @click.option("--seed", default=0, show_default=True, type=int)
 def quantize_steps(
     image_path: str,
-    levels: int,
+    levels_or_codebook: str,
     max_iter: int,
     meps: float | None,
     seed: int,
@@ -259,11 +289,15 @@ def quantize_steps(
     path = Path(image_path)
     image = load_image(path)
 
+    levels, init_codebook_vectors = parse_levels_or_codebook(levels_or_codebook)
+    validate_init_codebook(init_codebook_vectors, levels)
+
     images, distortions, _ = max_lloyd_progressive(
         image=image,
         levels=levels,
         max_iter=max_iter,
         meps=meps,
+        init_codebook_vectors=init_codebook_vectors,
         seed=seed,
     )
 
