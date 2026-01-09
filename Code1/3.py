@@ -95,34 +95,47 @@ def max_lloyd(
 
     return output_image, distortions, codebook
 
-def max_lloyd_iterative(
+def max_lloyd_progressive(
     image: Array,
     levels: int,
-    num_iter: int,
+    max_iter: int,
+    meps: float | None = None,
+    init_codebook_vectors: Array | None = None,
     seed: int | None = None,
 ) -> Tuple[List[Array], List[float], Array]:
     assert image.ndim == 3 and image.shape[2] == 3
-    assert num_iter >= 0
+    assert max_iter >= 0
 
     rng = np.random.default_rng(seed)
     data = image_to_vectors(image)
 
-    codebook = init_codebook(data, levels, rng)
+    if init_codebook_vectors is not None:
+        assert init_codebook_vectors.shape == (levels, data.shape[1])
+        codebook = init_codebook_vectors.astype(np.float64).copy()
+    else:
+        codebook = init_codebook(data, levels, rng)
 
     images: List[Array] = []
     distortions: List[float] = []
 
-    print(num_iter, levels)
-    for i in range(num_iter):
-        print(i)
+    prev_distortion = np.inf
+
+    for _ in range(max_iter):
         labels = assign_clusters(data, codebook)
         distortion = compute_distortion(data, codebook, labels)
+
         distortions.append(distortion)
 
         quantized = codebook[labels]
         quantized = np.clip(np.rint(quantized), 0, 255).astype(image.dtype)
         images.append(vectors_to_image(quantized, image.shape))
 
+        if meps is not None and prev_distortion < np.inf:
+            eps = (prev_distortion - distortion) / prev_distortion
+            if eps <= meps:
+                break
+
+        prev_distortion = distortion
         codebook = update_codebook(data, labels, levels, rng)
 
     images.append(image)
@@ -157,9 +170,20 @@ def show_side_by_side(original: Array, quantized: Array, title: str = "") -> Non
     plt.tight_layout()
     plt.show()
 
+def plot_distortion(ax: plt.Axes, distortions: List[float]) -> None:
+    ax.plot(range(len(distortions)), distortions, marker="o")
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Distortion")
+    ax.set_title("Distortion vs Iteration")
+    ax.grid(True)
 
-def show_image_sequence(images: List[Array], titles: List[str] | None = None) -> None:
-    n = len(images)
+def show_image_sequence(
+    images: List[Array],
+    titles: List[str] | None = None,
+    distortions: List[float] | None = None,
+) -> None:
+    n_img = len(images)
+    n = n_img + (1 if distortions is not None else 0)
     assert n > 0
 
     cols = math.ceil(math.sqrt(n))
@@ -168,13 +192,22 @@ def show_image_sequence(images: List[Array], titles: List[str] | None = None) ->
     fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 4 * rows))
     axes = np.atleast_1d(axes).reshape(rows, cols)
 
-    for i in range(rows * cols):
-        ax = axes.flat[i]
-        if i < n:
-            ax.imshow(images[i])
-            if titles is not None:
-                ax.set_title(titles[i])
+    idx = 0
+
+    if distortions is not None:
+        plot_distortion(axes.flat[idx], distortions)
+        idx += 1
+
+    for i in range(n_img):
+        ax = axes.flat[idx]
+        ax.imshow(images[i])
         ax.axis("off")
+        if titles is not None:
+            ax.set_title(titles[i])
+        idx += 1
+
+    for j in range(idx, rows * cols):
+        axes.flat[j].axis("off")
 
     plt.tight_layout()
     plt.show()
@@ -210,33 +243,37 @@ def quantize(
 
     title = f"levels={levels}, iterations={len(distortion)}"
     show_side_by_side(image, dataout, title=title)
-
 @cli.command(name="quantize-steps")
 @click.argument("image_path", type=click.Path(exists=True, dir_okay=False))
 @click.option("--levels", default=8, show_default=True, type=int)
-@click.option("--num-iter", default=5, show_default=True, type=int)
+@click.option("--max-iter", default=10, show_default=True, type=int)
+@click.option("--meps", default=None, type=float)
 @click.option("--seed", default=0, show_default=True, type=int)
 def quantize_steps(
     image_path: str,
     levels: int,
-    num_iter: int,
+    max_iter: int,
+    meps: float | None,
     seed: int,
 ) -> None:
     path = Path(image_path)
     image = load_image(path)
 
-    print(levels)
-    images, distortions, _ = max_lloyd_iterative(
+    images, distortions, _ = max_lloyd_progressive(
         image=image,
         levels=levels,
-        num_iter=num_iter,
+        max_iter=max_iter,
+        meps=meps,
         seed=seed,
     )
-    print(len(images), distortions)
 
-    titles = [f"iter {i}" for i in range(num_iter)] + ["original"]
+    titles = [f"iter {i}" for i in range(len(images) - 1)] + ["original"]
 
-    show_image_sequence(images, titles)
+    show_image_sequence(
+        images=images,
+        titles=titles,
+        distortions=distortions,
+    )
 
 
 if __name__ == "__main__":
