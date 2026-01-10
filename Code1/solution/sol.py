@@ -21,7 +21,7 @@ class cli:
     pass
 
 def get_provided_resource(fname: str) -> str:
-    path = f"instructions/{fname}"
+    path = f"../{fname}"
     if not os.path.isfile(path):
         raise RuntimeError(f"Missing resource file at '{path}'! Am I running from the correct directory?")
     return path
