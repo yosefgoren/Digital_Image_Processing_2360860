@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+from typing import Tuple, List
+from pathlib import Path
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 from dataclasses import dataclass as dc
@@ -592,7 +596,240 @@ def q2_f():
 def rotate():
     img = load_image("instructions/Brad.jpg")
     display_images_side_by_side(rot(img, 0.3, False), rot(img, 0.3, True))
-    
+
+# =====================================================================
+#                          Question 3
+# =====================================================================
+
+def image_to_vectors(img: np.ndarray) -> np.ndarray:
+    assert img.ndim == 3 and img.shape[2] == 3
+    return img.reshape(-1, 3).astype(np.float64)
+
+def vectors_to_image(vectors: np.ndarray, shape: Tuple[int, int, int]) -> np.ndarray:
+    assert vectors.ndim == 2 and vectors.shape[1] == 3
+    return vectors.reshape(shape)
+
+
+def init_codebook(data: np.ndarray, levels: int, rng: np.random.Generator) -> np.ndarray:
+    assert data.ndim == 2 and data.shape[1] == 3
+    assert levels <= data.shape[0]
+    idx = rng.choice(data.shape[0], size=levels, replace=False)
+    return data[idx].copy()
+
+
+def assign_clusters(data: np.ndarray, codebook: np.ndarray) -> np.ndarray:
+    assert data.ndim == 2 and codebook.ndim == 2
+    dists = np.sum((data[:, None, :] - codebook[None, :, :]) ** 2, axis=2)
+    return np.argmin(dists, axis=1)
+
+
+def update_codebook(
+    data: np.ndarray,
+    labels: np.ndarray,
+    levels: int,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    new_codebook = np.empty((levels, data.shape[1]), dtype=np.float64)
+
+    for k in range(levels):
+        mask = labels == k
+        if np.any(mask):
+            new_codebook[k] = data[mask].mean(axis=0)
+        else:
+            new_codebook[k] = data[rng.integers(0, data.shape[0])]
+
+    return new_codebook
+
+
+def compute_distortion(data: np.ndarray, codebook: np.ndarray, labels: np.ndarray) -> float:
+    diffs = data - codebook[labels]
+    return float(np.mean(np.sum(diffs ** 2, axis=1)))
+
+def max_lloyd(
+    image: np.ndarray,
+    levels: int,
+    max_iter: int,
+    meps: float | None = None,
+    init_codebook_vectors: np.ndarray | None = None,
+    seed: int | None = None,
+) -> Tuple[List[np.ndarray], List[float], np.ndarray]:
+    assert image.ndim == 3 and image.shape[2] == 3
+    assert max_iter >= 0
+
+    rng = np.random.default_rng(seed)
+    data = image_to_vectors(image)
+
+    if init_codebook_vectors is not None:
+        assert init_codebook_vectors.shape == (levels, data.shape[1])
+        codebook = init_codebook_vectors.astype(np.float64).copy()
+    else:
+        codebook = init_codebook(data, levels, rng)
+
+    images: List[np.ndarray] = []
+    distortions: List[float] = []
+
+    prev_distortion = np.inf
+
+    for _ in range(max_iter):
+        labels = assign_clusters(data, codebook)
+        distortion = compute_distortion(data, codebook, labels)
+
+        distortions.append(distortion)
+
+        quantized = codebook[labels]
+        quantized = np.clip(np.rint(quantized), 0, 255).astype(image.dtype)
+        images.append(vectors_to_image(quantized, image.shape))
+
+        if meps is not None and prev_distortion < np.inf:
+            eps = (prev_distortion - distortion) / prev_distortion
+            if eps <= meps:
+                break
+
+        prev_distortion = distortion
+        codebook = update_codebook(data, labels, levels, rng)
+
+    images.append(image)
+
+    return images, distortions, codebook
+
+def validate_init_codebook(
+    codebook: np.ndarray | None,
+    levels: int,
+) -> None:
+    if codebook is None:
+        return
+    assert codebook.shape == (levels, 3)
+
+def parse_levels_or_codebook(
+    value: str,
+) -> Tuple[int, np.ndarray | None]:
+    try:
+        levels = int(value)
+        assert levels > 0
+        return levels, None
+    except ValueError:
+        path = Path(value)
+        assert path.exists() and path.suffix == ".json"
+
+        with path.open("r") as f:
+            raw = json.load(f)
+
+        codebook = np.asarray(raw, dtype=np.float64)
+        assert codebook.ndim == 2 and codebook.shape[1] == 3
+        assert np.all((0.0 <= codebook) & (codebook <= 1.0))
+
+        codebook = codebook * 255.0
+
+        return codebook.shape[0], codebook
+
+
+def load_image_q3(path: Path) -> np.ndarray:
+    assert path.exists()
+    img = plt.imread(path)
+    assert img.ndim == 3 and img.shape[2] == 3
+    return img
+
+
+def show_side_by_side(original: np.ndarray, quantized: np.ndarray, title: str = "") -> None:
+    assert original.shape == quantized.shape
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    axes[0].imshow(original)
+    axes[0].set_title("Original")
+    axes[1].imshow(quantized)
+    axes[1].set_title("Quantized")
+
+    for ax in axes:
+        ax.axis("off")
+
+    if title:
+        fig.suptitle(title)
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_distortion(ax: plt.Axes, distortions: List[float]) -> None:
+    ax.plot(range(len(distortions)), distortions, marker="o")
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Distortion")
+    ax.set_title("Distortion vs Iteration")
+    ax.grid(True)
+
+def show_image_sequence(
+    images: List[np.ndarray],
+    titles: List[str] | None = None,
+    distortions: List[float] | None = None,
+) -> None:
+    n_img = len(images)
+    n = n_img + (1 if distortions is not None else 0)
+    assert n > 0
+
+    cols = math.ceil(math.sqrt(n))
+    rows = math.ceil(n / cols)
+
+    fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 4 * rows))
+    axes = np.atleast_1d(axes).reshape(rows, cols)
+
+    idx = 0
+
+    if distortions is not None:
+        plot_distortion(axes.flat[idx], distortions)
+        idx += 1
+
+    for i in range(n_img):
+        ax = axes.flat[idx]
+        ax.imshow(images[i])
+        ax.axis("off")
+        if titles is not None:
+            ax.set_title(titles[i])
+        idx += 1
+
+    for j in range(idx, rows * cols):
+        axes.flat[j].axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
+
+def quantize_steps(
+    image_path: str,
+    levels_or_codebook: str,
+    max_iter: int = 10,
+    meps: float | None = None,
+    seed: int = 0,
+) -> None:
+    path = Path(image_path)
+    image = load_image_q3(path)
+
+    levels, init_codebook_vectors = parse_levels_or_codebook(levels_or_codebook)
+    validate_init_codebook(init_codebook_vectors, levels)
+
+    images, distortions, _ = max_lloyd(
+        image=image,
+        levels=levels,
+        max_iter=max_iter,
+        meps=meps,
+        init_codebook_vectors=init_codebook_vectors,
+        seed=seed,
+    )
+
+    titles = [f"iter {i}" for i in range(len(images) - 1)] + ["original"]
+
+    show_image_sequence(
+        images=images,
+        titles=titles,
+        distortions=distortions,
+    )
+
+@cli.command("q3_b")
+def q3_b():
+    for n_vectors in [6, 15]:
+        quantize_steps("instructions/colorful.tif", n_vectors, meps=0.02)
+
+@cli.command("q3_d")
+def q3_d():
+    for init in ["max_lloyed_iv.json", 9]:
+        quantize_steps("instructions/colorful.tif", init)
 
 # =====================================================================
 #                          Main

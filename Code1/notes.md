@@ -212,21 +212,46 @@ We think that the interplolated versions are better in the cases where it matter
 It should not matter in the case of all right angles - 0, 90, 180, 270, since there is no interpolation to be done in these cases - the pixels fall 'right in place' of others.
 
 # Question 3
-## Q3, Part d:
-We can run the algorithm with the specified initial vectors with:
+## Q3, Part a
+The function was implemented as `max_lloyd`.
+
+## Q3, Part b
+If we run:
 ```bash
-./3.py quantize-steps instructions/colorful.tif max_lloyed_iv.json
+./sol.py q3_b
 ```
-And see the following results:
+For 6 colors we see:
+
+![alt text](image-21.png)
+
+And for 15 colors we see:
+
+![alt text](image-22.png)
+
+Both visually and numerically - we can see that 15 colors yileded a much nicer result - even at the same amounts of iterations.
+
+## Q3, Part c
+Since the described algorithm is not deterministic - each time we run it - we are likely to get a somewhat different result.
+This comes in to play both when we randomize the initial vectors, and in how we handle vectors to which no pixel was mapped (we randomize a different vector to replace it).
+
+Yet, it our specific implementation the randomization is controled by a seed that may be specified, so this psudo-randomness can be controlled to achive deterministic results.
+
+## Q3, Part d
+If we run:
+```bash
+./3.py q3_d
+```
+We first get the results for the pre-defind initialization vectors found in `max_lloyed_iv.json` (specified by the question):
+
 ![alt text](3_d_1.png)
 
-And if we let it randomize the same amount of initial vectors (9) with:
-```bash
-./3.py quantize-steps instructions/colorful.tif 9
-```
-We see the following results:
+And than get the result for if we randomize the same number (9) of initial vectors instead:
+
 ![alt text](3_d_2.png)
 
 So it looks like:
 1. the initial distortion with our specified set of vectors is much higher.
 2. after many iterations, they converge to very similar results (both visually and numerically).
+
+So it looks like just guessing randomly did much better than hardcoding.
+It's not impossible to provide initial vectors that would be better, but it seems like it's not a trevial task either as guessing initial vectors randomly performs better than expected.
