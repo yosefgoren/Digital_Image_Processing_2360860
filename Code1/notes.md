@@ -1,37 +1,105 @@
-# 1
-## Part a:
+The solution to the whole exercise is given in the `sol.py` file.
+The parts of the exercise are seperated and are in-order.
+
+The file works as a single script, that can be run different modes for each question in the exercise.
+
+# Question 1 - First Part
+## Q1, Part a
+We implement sampling the image as specified within the `SincAnalysis` class.
 
 
-## Part b:
-### 6
-Placing the code for this in `b.py`.
-I can run the animation with `python3 b.py`.
-Looks like spongbob running in circles:
+## Q1, Part b
+If we run:
+```bash
+./sol.py q1_b
+```
+We see:
 
-![alt text](image.png)
+![alt text](image-4.png)
 
-### 7
-This was more tricky than I expected.
-First, diff the first frame from all frames and normalize the result: this makes it easy to tell which frame is identical to the first frame (when we see all back).
-If I run `python3 b.py 200 --diff-first` I see diff frames slowly advancing:
+We can see that the function is constant in the x axis, which matches the fact that our function's value does not depend on x.
+We can see that the frequency in the y axis around the middle is something like 1.1, which is very close to what we would expect which is (where $C_y$ is what is multipled by $y$ inside $sin$):
+$$
+f_y =\frac{C_y}{2\pi} = \frac{\pi\frac{50}{21}}{2\pi} = \frac{25}{21} \approx 1.19
+$$
+And this falls well within the margin of error my bad visual estimation.
 
-![alt text](image-1.png)
+## Q1, Part c
+If we run:
+```bash
+./sol.py q1_c
+```
+We see:
 
-Now I can see the first replay of this first frame is around frame #20 but it's still a hastle timing it exactly.
-So I add a feature for moving between the frames manually and print the next frame number each time.
-If I run with `python3 b.py --diff-first --manual` I see:
+![alt text](image-5.png)
 
-![alt text](image-2.png)
+This really matches what we expect: the bounds on the x frequency are almost 0 since it's just a constant, while the y frequencies are more spread out, while still being concentrated bellow 1.5.
 
-Advancing to frame at index 19 shows:
+## Q1, Part d
+If we run:
+```bash
+./sol.py q1_d
+```
+We see:
 
-![alt text](image-3.png)
+![alt text](image-6.png)
 
-So indices trictly included in a single cycle are `[0, 18]` including edges - which is 19 different indices.
+![alt text](image-7.png)
+
+Interestingly, this time the frequencies are segnificantly lower than the real ones - it looks like a frequency of about 0.2.
+This is ofcourse aliasing which happens since our sampling frequency is too low now.
+
+## Q1, Part e
+Yes. If we want to correctly sample the waves of the `sinc` function we will have to have a sufficient sampling frequency, which was clearly demonstrated in part d.
+
+Theoretically, we would want our frequency to at-least match the nyquist bound:
+
+$$
+f \geq f_{nyquist} = 2\cdot f_{max} \approx 2\cdot 1.19 = 2.38
+$$
+
+Essentially, we want our y-axis sampling frequncy to be at-least $2.38$ while a sampling frequency of 0 or something really small should be fine for the x axis.
+
+This matches the bounding box of the frequency domain images from earlier.
+
+# Question 1 - Second Part
+## Q1, Part f
+Running:
+```bash
+./sol.py q1_f
+```
+Will display an animation.
+Here is a screenshot from it:
+
+![alt text](image-8.png)
+
+It's spongbob running in circles around his burning house.
+
+
+### Q1, Part g
+This was more tricky than I expected. Here is what I did:
+* First - diff the first frame from all frames and normalize the result: this makes it easy to tell which frame is identical to the first frame (when we see all back).
+* Additionally, I added a feature for manually iterating through the fragmes with the arrowkeys so I can go through them one-by-one.
+
+This can be run with:
+```bash
+./sol.py q1_g
+```
+
+So now I advance slowly through the frames...
+
+![alt text](image-9.png)
+
+And when I display frame at index 19 I see:
+
+![alt text](image-10.png)
+
+So indices strictly included in a single cycle are `[0, 18]` including edges - which is 19 different indices.
 
 So there are $19 [Frames / Cycle]$, if every frame was displayed for one second - spongebob would be cycling at $1/19 [Hz]$.
 
-### 8
+
+## Q1, Part h
 We would have to sample at least $2/19 [Samples / Frame]$.
 More explicitly, if we set:
 * $F = \frac{1}{19} [Cycle / Frame]$
@@ -45,15 +113,23 @@ $$
 \Rightarrow f_{nyquist} = 2*f_{max} = \frac{2n}{19} [Hz]
 $$
 
-### 9
+
+## Q1, Part i
 Remember the different frames are `[0, 18]`, so the image indices are equivalent (modulu) `%19`. Since `18%19 = (-1)%19`, sampling every 18 frames is the same as sampling the previous frame in terms of the sequence of frames that is shown.
 
 I have added a variable `sampling_ratio` - which dictates 'every how many frames is the shown image updated?', so with `sampling_ratio=2` the image updates every 2 frames e.t.c.
 
-If I run: `python3 b.py 36 18` bob runs backwards, but very slowly.
+If I run:
+```bash
+./sol.py q1_i
+```
+bob runs backwards.
+
+If we were to run this with the default display interval of 20, he would run very slowly.
+
 This is becaues while the sequence if images is identical to going back one frame in each cycle - each frame is now displayed 18 times longer.
 
-To fix the animation speed, we can run: `python3 b.py 2 18`.
+So when we run `q1_i`, the display interval is instead set to 2.
 
 In terms of frequency - this means cycling backwards is achived by a sampling frequency of:
 $$
@@ -62,11 +138,13 @@ $$
 = \frac{19}{18}\left[\frac{Samples}{Cycle}\right]
 $$
 
-# 2
+# Question 2
 
-# 3
 
-## Part d:
+
+# Question 3
+
+## Q3, Part d:
 We can run the algorithm with the specified initial vectors with:
 ```bash
 ./3.py quantize-steps instructions/colorful.tif max_lloyed_iv.json
