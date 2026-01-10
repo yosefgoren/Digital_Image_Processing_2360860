@@ -140,24 +140,92 @@ $$
 
 # Question 2
 
+## Q2, Part a
+This function was implemented as `interpolate_shift_dimension_fractional`.
 
+## Q2, Part b
+This function was implemented as `interpolate_shift_dimension`.
+
+## Q2, Part c
+If we run:
+```bash
+./sol.py q2_c
+```
+We see:
+
+![alt text](image-11.png)
+
+We have also added a mode where we can play with the shift interactively by click and dragging with the mouse.
+This can be done by running:
+```bash
+./sol.py q2_interactive
+```
+
+Which will show something like:
+
+![alt text](image-13.png)
+
+## Q2, Part d
+If we run:
+```bash
+./sol.py q2_d
+```
+We see:
+
+![alt text](mask1.png)
+
+## Q2, Part e
+If we run:
+```bash
+./sol.py q2_e
+```
+We see:
+![alt text](brad_win.png)
+
+## Q2, Part f
+If we run:
+```bash
+./sol.py q2_f
+```
+We see:
+
+![alt text](image-15.png)
+![alt text](image-16.png)
+![alt text](image-17.png)
+
+It looks like the edges in the rotated images are very 'sharp' - the image lost it's smoothness in this process.
+
+## Q2, Part g
+If we run:
+```bash
+./sol.py q2_g
+```
+We will see the interpolated and non-interpolated images side-by-side for each angle:
+
+![alt text](image-18.png)
+![alt text](image-19.png)
+![alt text](image-20.png)
+
+This yielded a significant improvement in the issue we described before - but not for the 90 degrees case - since it did not have much of an issue to begin with.
+We think that the interplolated versions are better in the cases where it matters.
+
+It should not matter in the case of all right angles - 0, 90, 180, 270, since there is no interpolation to be done in these cases - the pixels fall 'right in place' of others.
 
 # Question 3
-
 ## Q3, Part d:
 We can run the algorithm with the specified initial vectors with:
 ```bash
 ./3.py quantize-steps instructions/colorful.tif max_lloyed_iv.json
 ```
 And see the following results:
-![](3_d_1.png)
+![alt text](3_d_1.png)
 
 And if we let it randomize the same amount of initial vectors (9) with:
 ```bash
 ./3.py quantize-steps instructions/colorful.tif 9
 ```
 We see the following results:
-![](3_d_2.png)
+![alt text](3_d_2.png)
 
 So it looks like:
 1. the initial distortion with our specified set of vectors is much higher.
