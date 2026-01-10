@@ -15,7 +15,7 @@ If we run:
 ```
 We see:
 
-![alt text](image-4.png)
+![alt text](produced_images/image-4.png)
 
 We can see that the function is constant in the x axis, which matches the fact that our function's value does not depend on x.
 We can see that the frequency in the y axis around the middle is something like 1.1, which is very close to what we would expect which is (where $C_y$ is what is multipled by $y$ inside $sin$):
@@ -31,7 +31,7 @@ If we run:
 ```
 We see:
 
-![alt text](image-5.png)
+![alt text](produced_images/image-5.png)
 
 This really matches what we expect: the bounds on the x frequency are almost 0 since it's just a constant, while the y frequencies are more spread out, while still being concentrated bellow 1.5.
 
@@ -42,9 +42,9 @@ If we run:
 ```
 We see:
 
-![alt text](image-6.png)
+![alt text](produced_images/image-6.png)
 
-![alt text](image-7.png)
+![alt text](produced_images/image-7.png)
 
 Interestingly, this time the frequencies are segnificantly lower than the real ones - it looks like a frequency of about 0.2.
 This is ofcourse aliasing which happens since our sampling frequency is too low now.
@@ -71,7 +71,7 @@ Running:
 Will display an animation.
 Here is a screenshot from it:
 
-![alt text](image-8.png)
+![alt text](produced_images/image-8.png)
 
 It's spongbob running in circles around his burning house.
 
@@ -88,11 +88,11 @@ This can be run with:
 
 So now I advance slowly through the frames...
 
-![alt text](image-9.png)
+![alt text](produced_images/image-9.png)
 
 And when I display frame at index 19 I see:
 
-![alt text](image-10.png)
+![alt text](produced_images/image-10.png)
 
 So indices strictly included in a single cycle are `[0, 18]` including edges - which is 19 different indices.
 
@@ -153,7 +153,7 @@ If we run:
 ```
 We see:
 
-![alt text](image-11.png)
+![alt text](produced_images/image-11.png)
 
 We have also added a mode where we can play with the shift interactively by click and dragging with the mouse.
 This can be done by running:
@@ -163,7 +163,7 @@ This can be done by running:
 
 Which will show something like:
 
-![alt text](image-13.png)
+![alt text](produced_images/image-13.png)
 
 ## Q2, Part d
 If we run:
@@ -172,7 +172,7 @@ If we run:
 ```
 We see:
 
-![alt text](mask1.png)
+![alt text](produced_images/mask1.png)
 
 ## Q2, Part e
 If we run:
@@ -180,7 +180,7 @@ If we run:
 ./sol.py q2_e
 ```
 We see:
-![alt text](brad_win.png)
+![alt text](produced_images/brad_win.png)
 
 ## Q2, Part f
 If we run:
@@ -189,9 +189,9 @@ If we run:
 ```
 We see:
 
-![alt text](image-15.png)
-![alt text](image-16.png)
-![alt text](image-17.png)
+![alt text](produced_images/image-15.png)
+![alt text](produced_images/image-16.png)
+![alt text](produced_images/image-17.png)
 
 It looks like the edges in the rotated images are very 'sharp' - the image lost it's smoothness in this process.
 
@@ -202,9 +202,9 @@ If we run:
 ```
 We will see the interpolated and non-interpolated images side-by-side for each angle:
 
-![alt text](image-18.png)
-![alt text](image-19.png)
-![alt text](image-20.png)
+![alt text](produced_images/image-18.png)
+![alt text](produced_images/image-19.png)
+![alt text](produced_images/image-20.png)
 
 This yielded a significant improvement in the issue we described before - but not for the 90 degrees case - since it did not have much of an issue to begin with.
 We think that the interplolated versions are better in the cases where it matters.
@@ -222,11 +222,11 @@ If we run:
 ```
 For 6 colors we see:
 
-![alt text](image-21.png)
+![alt text](produced_images/image-21.png)
 
 And for 15 colors we see:
 
-![alt text](image-22.png)
+![alt text](produced_images/image-22.png)
 
 Both visually and numerically - we can see that 15 colors yileded a much nicer result - even at the same amounts of iterations.
 
@@ -243,11 +243,11 @@ If we run:
 ```
 We first get the results for the pre-defind initialization vectors found in `max_lloyed_iv.json` (specified by the question):
 
-![alt text](3_d_1.png)
+![alt text](produced_images/3_d_1.png)
 
 And than get the result for if we randomize the same number (9) of initial vectors instead:
 
-![alt text](3_d_2.png)
+![alt text](produced_images/3_d_2.png)
 
 So it looks like:
 1. the initial distortion with our specified set of vectors is much higher.
