@@ -1,3 +1,4 @@
+#!/usr/bin/bash
 ./sol.py q1_b
 ./sol.py q1_c
 ./sol.py q1_d

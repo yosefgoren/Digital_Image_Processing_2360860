@@ -1,7 +1,22 @@
+# General Notes
+### The `sol.py` file.
 The solution to the whole exercise is given in the `sol.py` file.
 The parts of the exercise are seperated and are in-order.
 
-The file works as a single script, that can be run different modes for each question in the exercise.
+The `sol.py` contains all of our code and can run in many different modes - each corresponding to a specific part of a specific question.
+For example - part C of question 1 is run with: `./sol.py q1_c` or `python3 sol.py q1_c`.
+
+### Resource files
+There are 2 types of resource files:
+1. Provided resource files - the ones given by the exercise such as `Brad.jpg`
+    `sol.py` assumes these files are found under the `..` dir with respect to the current working directory.
+2. Our resource files - these are files we made on which our code depends. We provide these with our solution under the `our_resource_files` dir.
+    `sol.py` assumes this dir will be found at `./our_resource_files`.
+
+### Platform Compatibility
+* You might have to install some pip packages to run `sol.py`, it should be quite a short list and all dependencies are found right at the start of `sol.py`.
+* You will not be able to run `./sol.py` on windows and should instead use `python3 sol.py` or `python sol.py`.
+* `sol.py` should work on both windows and linux, but only linux was checked.
 
 # Question 1 - First Part
 ## Q1, Part a
