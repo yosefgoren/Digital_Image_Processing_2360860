@@ -81,8 +81,6 @@ class SincAnalysis:
 
     def show_freq(self):
         img = self.get_img()
-
-        # 2D FFT
         F = np.fft.fft2(img)
         F = np.fft.fftshift(F)
 
@@ -214,7 +212,6 @@ def q1_i():
 
 def load_image(path: str, require_rgb: bool = False) -> np.ndarray:
     img = Image.open(path)
-    # Convert to RGB if necessary (handles RGBA, P, L modes)
     if img.mode != 'RGB' and require_rgb:
         img = img.convert('RGB')
     return np.array(img)
@@ -239,7 +236,6 @@ def display_images_side_by_side(img1: np.ndarray, img2: np.ndarray, titles=("Ima
 
 
 def display_image(img: np.ndarray, scale: float = 2.0, fullscreen: bool = False):
-
     h, w = img.shape[:2]
 
     # Matplotlib uses inches; default DPI is usually 100
@@ -262,19 +258,15 @@ def add_shifted_dimension(tensor: np.ndarray, diff: tuple) -> np.ndarray:
     The new dimension contains the original tensor at index 0 and a cyclically
     shifted version at index 1.
     
-    Args:
-        tensor: Input numpy array with shape (s1, s2, ..., sn)
-        diff: Tuple (d1, d2, ..., dn) specifying the shift amounts for each dimension.
-              Cell at (x1, x2, ..., xn) will get content from ((x1-d1) % s1, (x2-d2) % s2, ..., (xn-dn) % sn)
-    
-    Returns:
+    tensor: Input numpy array with shape (s1, s2, ..., sn)
+    diff: Tuple (d1, d2, ..., dn) specifying the shift amounts for each dimension.
+            Cell at (x1, x2, ..., xn) will get content from ((x1-d1) % s1, (x2-d2) % s2, ..., (xn-dn) % sn)
+
+    Return value:
         numpy array with shape (s1, s2, ..., sn, 2) where:
         - [..., 0] contains the original tensor
         - [..., 1] contains the shifted tensor
     """
-    # Create shifted version using numpy.roll
-    # To shift so that cell (x1, x2, ...) gets value from (x1-d1, x2-d2, ...),
-    # we need to roll by (d1, d2, ...) along axes (0, 1, ...)
     shifted = tensor.copy()
     axes = tuple(range(len(diff)))
     shift_values = diff
@@ -290,22 +282,11 @@ def create_weight_vector(f: float) -> np.ndarray:
 
 def normalize_shift(shift: float) -> tuple[int, float]:
     """
-    Normalize a shift value to separate integer and fractional parts.
-    
-    Splits the shift into an integer part and a fractional part in the range [0, 1).
-    
-    Args:
-        shift: Shift value (can be any float)
-    
-    Returns:
-        Tuple (shift_int, shift_frac) where:
-        - shift_int is the integer part of the shift (can be negative)
-        - shift_frac is the fractional part in the range [0, 1)
+    Normalize a shift value to separate integer and fractional parts by spliting the shift into an integer part and a fractional part in the range [0, 1).
     """
     shift_int = int(np.floor(shift))
     shift_frac = shift - shift_int
     
-    # Handle negative fractional parts to ensure shift_frac is in [0, 1)
     if shift_frac < 0:
         shift_frac += 1
         shift_int -= 1
@@ -314,23 +295,20 @@ def normalize_shift(shift: float) -> tuple[int, float]:
 
 def interpolate_last_dimention(t: np.ndarray, shift_frac: float) -> np.ndarray:
     assert t.shape[-1] == 2
-    return np.einsum('...i,i->...', t, create_weight_vector(shift_frac)) # Collapse last dimention into inner product.
+    return np.einsum('...i,i->...', t, create_weight_vector(shift_frac)) # collapse last dimention
 
 def interpolate_shift_dimension_fractional(tensor: np.ndarray, axis: int, shift_frac: float) -> np.ndarray:
     original_dtype = tensor.dtype
     
-    # Convert to float to avoid overflow in weighted interpolation
+    # to avoid overflow
     result = tensor.astype(np.float64)
     
-    # Perform linear interpolation along the specified axis with fractional part
     if shift_frac != 0:
-        # Create shift tuple: shift by 1 only along the specified axis
         shift_tuple = [0] * tensor.ndim
         shift_tuple[axis] = 1
         result = add_shifted_dimension(result, tuple(shift_tuple))
         result = interpolate_last_dimention(result, shift_frac)
     
-    # Convert back to original dtype, handling uint8 overflow properly
     if original_dtype == np.uint8:
         result = np.clip(result, 0, 255).astype(original_dtype)
     else:
@@ -343,28 +321,20 @@ def interpolate_shift_dimension(tensor: np.ndarray, axis: int, shift: float) -> 
     """
     Perform linear interpolation along a specific dimension with fractional shift.
     
-    For each position along the specified axis, samples from a fractional position
-    using linear interpolation between the two nearest integer positions.
-    
-    Args:
-        tensor: Input tensor of any shape
-        axis: The dimension/axis along which to interpolate (0-indexed)
-        shift: Fractional shift amount. Positive values shift in the positive direction.
-               For position i, samples from position (i - shift).
-    
-    Returns:
-        Tensor of the same shape as input with interpolation applied along the specified axis
+    tensor: Input tensor of any shape
+    axis: The dimension/axis along which to interpolate (0-indexed)
+    shift: Fractional shift amount. Positive values shift in the positive direction.
+            For position i, samples from position (i - shift).
+
+    Returns a tensor of the same shape as input with interpolation applied along the specified axis.
     """
-    # Normalize shift into integer and fractional parts
     shift_int, shift_frac = normalize_shift(shift)
     
     result = tensor.copy()
     
-    # Apply integer shift first if needed
     if shift_int != 0:
         result = np.roll(result, shift=shift_int, axis=axis)
     
-    # Perform fractional interpolation (shift_frac is now guaranteed to be in [0, 1))
     result = interpolate_shift_dimension_fractional(result, axis, shift_frac)
     
     return result
@@ -372,25 +342,17 @@ def interpolate_shift_dimension(tensor: np.ndarray, axis: int, shift: float) -> 
 
 def bilinear_interpolate_shift(img: np.ndarray, dx: float, dy: float) -> np.ndarray:
     """
-    Perform bilinear interpolation on an image with fractional index shifts.
-    
-    For each pixel at position (i, j), samples from position (i - dx, j - dy) using
+    for each pixel at position (i, j), samples from position (i - dx, j - dy) using
     bilinear interpolation from the 4 nearest integer pixel positions.
     
-    Args:
-        img: Input image tensor of shape (height, width, channels) or (height, width)
-        dx: Fractional shift in the first dimension (rows/x-axis)
-        dy: Fractional shift in the second dimension (columns/y-axis)
-    
-    Returns:
-        Image tensor of the same shape as input with bilinear interpolation applied
+    img: Input image tensor of shape (height, width, channels) or (height, width)
+    dx: Fractional shift in the first dimension (rows/x-axis)
+    dy: Fractional shift in the second dimension (columns/y-axis)
     """
     result = img.copy()
     
-    # First interpolate along the x-axis (axis 0 - rows)
     result = interpolate_shift_dimension(result, axis=1, shift=dx)
     
-    # Then interpolate along the y-axis (axis 1 - columns)
     result = interpolate_shift_dimension(result, axis=0, shift=dy)
     
     return result
@@ -398,20 +360,14 @@ def bilinear_interpolate_shift(img: np.ndarray, dx: float, dy: float) -> np.ndar
 
 def interactive_shift(img: np.ndarray):
     """
-    Interactive function to shift an image by clicking and dragging the mouse.
-    
-    Click and drag on the image to shift it. The shift amount is determined by
+    click and drag on the image to shift it. The shift amount is determined by
     the drag distance, allowing for both fractional and large shifts.
-    
-    Args:
-        img: Input image tensor to shift interactively
     """
     fig, ax = plt.subplots()
     im_display = ax.imshow(img)
     ax.axis('off')
     ax.set_title('Click and drag to shift image. Press q to quit.')
     
-    # Store original image and current shift state
     original_img = img.copy()
     current_dx = 0.0
     current_dy = 0.0
@@ -434,18 +390,12 @@ def interactive_shift(img: np.ndarray):
             return
         if event.xdata is None or event.ydata is None:
             return
-        
-        # Calculate shift from drag distance
-        # Note: event.xdata/ydata are in data coordinates (pixel coordinates)
-        # For images, y-axis is inverted, so we need to account for that
         dx = event.xdata - drag_start_pos[0]  # horizontal shift
         dy = event.ydata - drag_start_pos[1]  # horizontal shift
         
-        # Calculate total shift: base shift from previous drags + current drag offset
         new_dx = drag_start_shift[0] + dx
         new_dy = drag_start_shift[1] + dy
         
-        # Apply shift and update display
         shifted_img = bilinear_interpolate_shift(original_img, new_dx, new_dy)
         im_display.set_array(shifted_img)
         fig.canvas.draw_idle()
@@ -456,7 +406,6 @@ def interactive_shift(img: np.ndarray):
             return
         
         if event.inaxes == ax and event.button == 1 and event.xdata is not None and event.ydata is not None:
-            # Calculate final shift and update current state
             dx = event.xdata - drag_start_pos[0]
             dy = event.ydata - drag_start_pos[1]
             current_dx = drag_start_shift[0] + dx
@@ -480,23 +429,6 @@ def interactive_shift(img: np.ndarray):
 
 
 def bottom_half_circle_mask(sx: int, sy: int, mx: int, my: int, r: float) -> np.ndarray:
-    """
-    Create a binary (sx, sy) mask with ones in the bottom half of a circle.
-
-    Parameters
-    ----------
-    sx, sy : int
-        Image dimensions.
-    mx, my : float or int
-        Circle center.
-    r : float or int
-        Circle radius.
-
-    Returns
-    -------
-    mask : ndarray, shape (sx, sy), dtype=np.uint8
-        Binary mask (0 or 1).
-    """
     y, x = np.ogrid[:sx, :sy]
 
     dist_sq = (x - mx)**2 + (y - my)**2
