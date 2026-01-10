@@ -20,8 +20,14 @@ import os
 class cli:
     pass
 
-def get_provided_resource(image_name: str) -> str:
-    path = f"instructions/{image_name}"
+def get_provided_resource(fname: str) -> str:
+    path = f"instructions/{fname}"
+    if not os.path.isfile(path):
+        raise RuntimeError(f"Missing resource file at '{path}'! Am I running from the correct directory?")
+    return path
+
+def get_our_resource(fname: str) -> str:
+    path = f"our_resource_files/{fname}"
     if not os.path.isfile(path):
         raise RuntimeError(f"Missing resource file at '{path}'! Am I running from the correct directory?")
     return path
@@ -836,7 +842,7 @@ def q3_b():
 
 @cli.command("q3_d")
 def q3_d():
-    for init in ["max_lloyed_iv.json", 9]:
+    for init in [get_our_resource("max_lloyed_iv.json"), 9]:
         quantize_steps(get_provided_resource("colorful.tif"), init)
 
 # =====================================================================
@@ -1142,10 +1148,10 @@ def q5_b():
 @cli.command("q5_c")
 def q5_c():
     # Now, we load the 4 templates we cropped from the image and calculate SSDs
-    temp_a = plt.imread('image_resources/tempa.jpg')
-    temp_A = plt.imread('image_resources/tempacap.jpg')
-    temp_t = plt.imread('image_resources/tempt.jpg')
-    temp_T = plt.imread('image_resources/temptcap.jpg')
+    temp_a = plt.imread(get_our_resource("tempa.jpg"))
+    temp_A = plt.imread(get_our_resource("tempacap.jpg"))
+    temp_t = plt.imread(get_our_resource("tempt.jpg"))
+    temp_T = plt.imread(get_our_resource("temptcap.jpg"))
     # we cropped the images with MSPaint and we saved as JPG so we need to convert to gray levels
     temps = [temp_a,temp_A,temp_t,temp_T]
     for i in range(len(temps)):
