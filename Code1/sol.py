@@ -14,11 +14,17 @@ from PIL import Image
 from skimage.measure import shannon_entropy
 from skimage.color import rgb2gray
 import scipy.ndimage
+import os
 
 @click.group()
 class cli:
     pass
 
+def get_provided_resource(image_name: str) -> str:
+    path = f"instructions/{image_name}"
+    if not os.path.isfile(path):
+        raise RuntimeError(f"Missing resource file at '{path}'! Am I running from the correct directory?")
+    return path
 
 # =====================================================================
 #                          Question 1 - Part A
@@ -115,7 +121,7 @@ def q1_d():
 # =====================================================================
 
 def loadbob():
-    mat = loadmat("instructions/SpongeBob.mat")
+    mat = loadmat(get_provided_resource("SpongeBob.mat"))
     rawbob = mat["SpongeBob"]
     assert rawbob.ndim == 3
 
@@ -553,19 +559,19 @@ def rot(t: np.ndarray, angle: float, intr_factions: bool) -> np.ndarray:
         return t[source_indices_tensor[0], source_indices_tensor[1]]
 
 def get_brad_mask():
-    img = load_image("instructions/Brad.jpg")
+    img = load_image(get_provided_resource("Brad.jpg"))
     shape = img.shape
     return bottom_half_circle_mask(shape[0], shape[1], 250, 200, 140)
 
 @cli.command("q2_c")
 def q2_c():
-    img = load_image("instructions/Cameraman.jpg")
+    img = load_image(get_provided_resource("Cameraman.jpg"))
     display_image(bilinear_interpolate_shift(img, 170.3, 130.8))
 
 @cli.command("q2_interactive")
 @click.argument("fname", default="Cameraman.jpg")
 def q2_interactive(fname: str):
-    interactive_shift(load_image(f"instructions/{fname}"))
+    interactive_shift(load_image(get_provided_resource(fname)))
 
 @cli.command("q2_d")
 def q2_d():
@@ -574,14 +580,14 @@ def q2_d():
     
 @cli.command("q2_e")
 def q2_e():
-    img = load_image("instructions/Brad.jpg")
+    img = load_image(get_provided_resource("Brad.jpg"))
     mask = get_brad_mask()
     
     display_image(img*mask)
 
 @cli.command("q2_f")
 def q2_f():
-    img = load_image("instructions/Brad.jpg")
+    img = load_image(get_provided_resource("Brad.jpg"))
     mask = get_brad_mask()
     
     img = img*mask
@@ -591,18 +597,13 @@ def q2_f():
 
 @cli.command("q2_g")
 def q2_f():
-    img = load_image("instructions/Brad.jpg")
+    img = load_image(get_provided_resource("Brad.jpg"))
     mask = get_brad_mask()
     
     img = img*mask
 
     for angle in [np.pi/frac for frac in [3, 4, 2]]: #60, 45, 90
         display_images_side_by_side(rot(img, angle, False), rot(img, angle, True))
-
-@cli.command("rotate")
-def rotate():
-    img = load_image("instructions/Brad.jpg")
-    display_images_side_by_side(rot(img, 0.3, False), rot(img, 0.3, True))
 
 # =====================================================================
 #                          Question 3
@@ -831,18 +832,18 @@ def quantize_steps(
 @cli.command("q3_b")
 def q3_b():
     for n_vectors in [6, 15]:
-        quantize_steps("instructions/colorful.tif", n_vectors, meps=0.02)
+        quantize_steps(get_provided_resource("colorful.tif"), n_vectors, meps=0.02)
 
 @cli.command("q3_d")
 def q3_d():
     for init in ["max_lloyed_iv.json", 9]:
-        quantize_steps("instructions/colorful.tif", init)
+        quantize_steps(get_provided_resource("colorful.tif"), init)
 
 # =====================================================================
 #                          Question 4
 # =====================================================================
 
-heisenberg = plt.imread("instructions/heisenberg.jpg")
+heisenberg = plt.imread(get_provided_resource("heisenberg.jpg"))
 
 #section a:
 @cli.command("q4_a")
@@ -1006,7 +1007,7 @@ def q4_d():
 # section e
 @cli.command("q4_e")
 def q4_e():
-    mauritius_rgb= plt.imread("instructions/mauritius.jpg")
+    mauritius_rgb= plt.imread(get_provided_resource("mauritius.jpg"))
     mauritius =(rgb2gray(mauritius_rgb)*255).astype(np.uint8) #because rgb2gray produces floats between 0 and 1, we want greyscale between 0 and 255
 
     mauritius_entropy=shannon_entropy(mauritius,base=2)
@@ -1036,7 +1037,7 @@ def un_zigzag(vec_img, M, N):
 
 @cli.command("q4_f")
 def q4_f():
-    scotland_rgb = plt.imread("instructions/scotland.jpg")
+    scotland_rgb = plt.imread(get_provided_resource("scotland.jpg"))
     scotland = (rgb2gray(scotland_rgb)*255).astype(np.int16) # because rgb2gray produces floats between 0 and 1, we want greyscale between 0 and 255
     scot_column_stack = scotland.flatten(order='F')
 
@@ -1099,15 +1100,15 @@ def calc_SSD(image,template):
     return S
 
 # section b:
-poe_img = plt.imread('instructions/Text.jpg')
+poe_img = plt.imread(get_provided_resource("Text.jpg"))
 
 @cli.command("q5_b")
 def q5_b():
-    e10 = plt.imread('instructions/E10.jpg')
-    e11 = plt.imread('instructions/E11.jpg')
-    e12 = plt.imread('instructions/E12.jpg')
-    e14 = plt.imread('instructions/E14.jpg')
-    e16 = plt.imread('instructions/E16.jpg')
+    e10 = plt.imread(get_provided_resource("E10.jpg"))
+    e11 = plt.imread(get_provided_resource("E11.jpg"))
+    e12 = plt.imread(get_provided_resource("E12.jpg"))
+    e14 = plt.imread(get_provided_resource("E14.jpg"))
+    e16 = plt.imread(get_provided_resource("E16.jpg"))
     imgs = [e10,e11,e12,e14,e16]
     titles = ["E10","E11","E12","E14","E16"]
     fig,axes = plt.subplots(1,5,figsize=(20,6))
@@ -1222,8 +1223,8 @@ def q5_c():
     print(f"Occurences of T: {occur_T}")
 
     # for the next part we load template of 'c' and template of 'k'
-    temp_c = plt.imread('instructions/c.jpg')
-    temp_k = plt.imread('instructions/k.jpg')
+    temp_c = plt.imread(get_provided_resource("c.jpg"))
+    temp_k = plt.imread(get_provided_resource("k.jpg"))
     # let's calculate SSD of temp_c with the edgar allan poe image
 
     ssd_c = calc_SSD(poe_img,temp_c)
