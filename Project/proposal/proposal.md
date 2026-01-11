@@ -1,20 +1,86 @@
-# Project Proposal: Brightness-Preserving Diffusion for Image Colorization
+# Project Proposal  
+**Course:** Digital Image Processing (2360860)  
+**Student:** <Your Name>  
+**ID:** <Your ID>  
+**Email:** <Your Email>  
+**Semester:** Winter 25–26  
 
-## Motivation
-Image colorization aims to reconstruct plausible chrominance information for grayscale images while preserving their structural and luminance content. Traditional approaches—ranging from CNN-based regression to GANs—often produce desaturated colors or semantic inconsistencies. Recently, diffusion models have emerged as powerful generative priors for image synthesis and conditional generation. However, most diffusion-based colorization methods apply standard Gaussian noise either to the full image or to chrominance channels without explicitly enforcing perceptual constraints such as brightness preservation.
+---
+
+## Project Title  
+**Brightness-Preserving Diffusion Processes for Automatic Image Colorization**
+
+---
+
+## Starting Point and Motivation
+
+This project will start from the recent paper  
+**“Multimodal Semantic-Aware Automatic Colorization with Diffusion Prior”**  
+(Han Wang et al., 2024).
+
+The paper adapts **Stable Diffusion** for automatic image colorization by conditioning the diffusion process on grayscale input and high-level semantic cues. A key contribution of the paper is *luminance alignment*, implemented by injecting grayscale information into the latent diffusion process and by using a luminance-aware decoder during reconstruction.
+
+While the method achieves strong results, an important observation is that **luminance is guided rather than preserved by construction**. The diffusion process itself still operates on full latent representations using standard Gaussian noise, meaning that brightness information can be temporarily distorted and must later be corrected by conditioning and decoder design.
+
+This project explores whether a more principled alternative is possible.
+
+---
 
 ## Main Idea
-This project proposes to study **brightness-preserving diffusion processes for image colorization**, where the forward diffusion corrupts **only the chrominance components** of an image while keeping luminance fixed. Instead of isotropic Gaussian noise in color space, the corruption process will be constrained to perceptually meaningful subspaces (e.g., hue rotation or chroma-plane perturbations), thereby respecting constant-brightness manifolds. The reverse diffusion model is trained to iteratively recover plausible color information conditioned on the grayscale image.
 
-## Methodology
-Images will be represented in perceptually motivated color spaces such as Lab or HSV. During training, the luminance (L or V) channel will remain unchanged, while controlled noise is applied to chrominance channels following a diffusion schedule. A conditional diffusion model will be trained to predict the denoising direction given the corrupted chroma, the fixed luminance, and the diffusion timestep. At inference time, the model will start from a grayscale image with randomized chrominance initialization and iteratively synthesize color.
+Instead of guiding luminance through conditioning, this project proposes to **remove luminance from the stochastic diffusion process altogether**.
 
-## Relation to Prior Work
-Recent diffusion-based colorization methods use standard diffusion formulations or latent diffusion models conditioned on grayscale images and, in some cases, additional semantic cues. In contrast, this project focuses explicitly on **modifying the forward diffusion process** to enforce brightness preservation and perceptual constraints, enabling a controlled study of how the choice of corruption affects colorization quality and stability.
+The central idea is to redesign the forward diffusion process such that:
+- The **luminance (brightness) channel remains fixed** throughout training and inference.
+- Noise is applied **only to chrominance components** in a perceptually meaningful color space (e.g., Lab or HSV).
+- The diffusion model learns to iteratively recover color information while brightness is preserved by construction.
+
+In contrast to the reference paper, where luminance consistency is enforced indirectly, this approach aims to guarantee luminance preservation at every diffusion step.
+
+---
+
+## Relation to the Reference Paper
+
+The proposed work is directly grounded in the pipeline of Wang et al.:
+
+- Both approaches use diffusion models for grayscale-to-color generation.
+- Both condition the model on grayscale structure.
+- Both aim to reduce artifacts and semantic inconsistencies.
+
+However, the key difference is philosophical and technical:
+
+- **Reference paper:**  
+  Luminance is *guided* using latent concatenation and a luminance-aware decoder, but standard Gaussian diffusion is still applied.
+- **Proposed project:**  
+  Luminance is *preserved by construction* by redefining the diffusion corruption process to act only on chrominance.
+
+This allows a controlled study of whether explicit luminance invariance simplifies learning, improves stability, or reduces artifacts.
+
+---
+
+## Methodology Overview
+
+1. Convert training images to a perceptual color space (e.g., Lab).
+2. Keep the luminance channel fixed.
+3. Apply a diffusion process only to chrominance channels using different noise designs.
+4. Train a conditional diffusion model to denoise chrominance given luminance.
+5. Compare results against a baseline diffusion colorization method inspired by the reference paper.
+
+---
 
 ## Experimental Plan
-The project will reproduce a baseline diffusion-based colorization method and compare it against the proposed brightness-preserving diffusion. Experiments will evaluate visual quality and quantitative metrics (e.g., PSNR, SSIM, perceptual similarity) on standard datasets. Additional ablation studies will examine different color spaces and corruption strategies.
 
-## Expected Contribution
-The expected outcome is a clearer understanding of how structured, perceptually constrained diffusion processes impact automatic image colorization. This work aims to provide both empirical results and qualitative insights, contributing to the broader study of diffusion models for low-level and mid-level image processing tasks.
+- Reproduce or approximate a diffusion-based colorization baseline.
+- Implement the proposed brightness-preserving diffusion variant.
+- Evaluate results visually and quantitatively (FID, PSNR, colorfulness).
+- Conduct ablation studies on color spaces and noise formulations.
 
+---
+
+## Expected Outcome
+
+The project aims to clarify the role of the diffusion corruption process in colorization tasks and to evaluate whether enforcing brightness preservation at the process level offers advantages over luminance guidance alone. The work is expected to produce both qualitative insights and empirical results relevant to diffusion-based image processing.
+
+---
+
+*This proposal will be refined after completing a deeper technical review of the reference paper and obtaining approval for the experimental scope.*
