@@ -1,60 +1,59 @@
-# Project Proposal  
-**Course:** Digital Image Processing (2360860)  
-**Student:** <Your Name>  
-**ID:** <Your ID>  
-**Email:** <Your Email>  
-**Semester:** Winter 25–26  
+# Digital Image Processing 2360860 w25-26 - Project Proposal
+- **Student Name:** Yosef Goren
+- **ID:** 211515606
+- **Email:** yosefgoren@campus.technion.ac.il
 
 ---
 
-## Project Title  
-**Brightness-Preserving Diffusion for Automatic Image Colorization**
-
----
+# Image Colorization: Luminance-Preserving Diffusion
 
 ## Motivation
+Image colorization is a classic image processing problem. Unsuprizingly - various ML models have been sucessfully applied to it: CNN Regression Models, GAN's and VAE's.
+More recenctly, this list came to include stable-diffusion which have exhibited SOTA results for image generation.
 
-Automatic image colorization is the task of assigning plausible colors to a grayscale image. In recent years, diffusion models have shown strong performance in image generation and have started to be used for colorization as well, mainly by conditioning a diffusion model on a grayscale input.
+Therefore we belive a key question in this doamin is:
 
-A recent paper, **“Multimodal Semantic-Aware Automatic Colorization with Diffusion Prior” (Wang et al., 2024)**, adapts Stable Diffusion for this task. The paper introduces luminance conditioning in both the latent diffusion process and the final image reconstruction, and achieves strong visual results.
+**Q1: How/Should we pivot stable-diffusion architacture to fit image colorization?**
 
-However, an important observation from this work is that **luminance is guided, not preserved by construction**. The diffusion process itself still uses standard Gaussian noise on latent representations that mix brightness and color, and luminance consistency is enforced indirectly through conditioning and decoder design.
+## Research Grounding Point
+As a reference point, we consider the paper:
 
-This raises a natural question: instead of guiding luminance throughout the diffusion process, what happens if luminance is removed from the stochastic process altogether?
+**P1: Multimodal Semantic-Aware Automatic Colorization with Diffusion Prior (Wang et al., 2024)**.
 
----
+This paper provides an image colorization solution (inference:) which intakes greyscale images and textual directions.
+For training - they use a pre-trained image generation diffusion model, and fine tune it with a tweaked architacture:
+The tweak introduces luminance conditioning in the reconstruction process by essentially concatenating the greyscale image to the intermidiate result before each pass.
 
-## Main Idea
+However, an important observation from this work is that **luminance is guided, not preserved by construction**. The diffusion process itself still uses standard Gaussian noise on latent representations that mix luminance and color, and luminance consistency is enforced indirectly through conditioning and decoder design.
 
-The main idea of this project is to modify the diffusion process used for image colorization so that **brightness is preserved by construction**.
+This raises a natural question:
 
-Rather than applying diffusion noise to full image representations, the proposed approach applies diffusion **only to chrominance channels**, while keeping the luminance channel fixed throughout training and inference. The model is then trained to recover chrominance information conditioned on the unchanged luminance.
+**Q2: What happens if luminance is removed from the reconstruction process altogether?**
 
-This directly contrasts with the reference paper’s approach, where luminance information is repeatedly injected to correct distortions introduced by the diffusion process. Here, the goal is to avoid those distortions in the first place by redefining the forward diffusion process.
 
----
+## Project Suggestion
+We suggest performing a quantitative comparison between diffusion models that utilize different techniques for using the greyscale image as a prior - aiming to answer Q1.
+
+Additionally, the specific approach were diffusion is applied **only to chrominance channels**, while keeping the luminance channel fixed will be examined - aiming to answer Q2.
+
 
 ## Method Overview
+While it's too early to decide on specific methodology, we imagine answering Q2 might look like:
+- Pick one of the following:
+    * Taking a pre-trained image generation stable-diffusion model and adapting it to a form where only luminance is provided to it.
+    * Training a model from scratch.
+- Traning/Fine-tuning it, iteratively:
+    * Take a colored image.
+    * Apply noise in the chrominance space to the image (luminance fixed).
+    * Require the model to restore colors.
 
-- Images are converted to a perceptual color space (e.g., Lab or HSV).
-- The luminance channel is kept fixed.
-- Noise is applied only to chrominance channels following a diffusion schedule.
-- A conditional diffusion model learns to denoise chrominance given luminance.
-- At inference time, the model starts from a grayscale image with random chrominance and iteratively synthesizes color.
+Wether we use a base-model or not - it will be structurally incapable of modifying the luminance.
 
-The architecture and training setup will follow existing diffusion-based colorization methods as closely as possible, with the main change being the definition of the forward diffusion process.
+For inference:
+- Take a greyscale image.
+- Apply noise in the chrominance space to it.
+- Apply the model to it iteratively.
 
----
-
-## Experimental Plan
-
-- Implement or reproduce a baseline diffusion-based colorization method inspired by the reference paper.
-- Implement the proposed brightness-preserving diffusion variant.
-- Compare visual quality and quantitative metrics such as FID, PSNR, and colorfulness.
-- Perform ablation studies on color space choice and chrominance noise design.
-
----
-
-## Expected Outcome
-
-The project aims to evaluate whether preserving luminance by construction simplifies the colorization task, reduces artifacts, or improves stability compared to luminance-guided diffusion. The results should provide practical insight into how diffusion process design affects image colorization performance.
+## Practical Notes
+We have struggled to find a reference paper with an implementation that is actually accessible.
+This might mean our work will be based on a different work to ensure this project maintains a resonable scale and does not turn into a coding project.
