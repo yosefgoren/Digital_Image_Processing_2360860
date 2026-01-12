@@ -8,21 +8,21 @@
 # Image Colorization: Luminance-Preserving Diffusion
 
 ## Motivation
-Image colorization is a classic image processing problem. Unsuprizingly - various ML models have been sucessfully applied to it: CNN Regression Models, GAN's and VAE's.
-More recenctly, this list came to include stable-diffusion which have exhibited SOTA results for image generation.
+Image colorization is a classic image processing problem. Unsurprisingly, various ML models have been successfully applied to it: CNN regression models, GANs, and VAEs.
+More recently, this list has come to include Stable Diffusion, which has exhibited SOTA results for image generation.
 
-Therefore we belive a key question in this doamin is:
+Therefore, we believe a key question in this domain is:
 
-**Q1: How/Should we pivot stable-diffusion architacture to fit image colorization?**
+**Q1: How/Should we adapt the Stable Diffusion architecture to fit image colorization?**
 
 ## Research Grounding Point
 As a reference point, we consider the paper:
 
-**P1: Multimodal Semantic-Aware Automatic Colorization with Diffusion Prior (Wang et al., 2024)**.
+**P1: Multimodal Semantic-Aware Automatic Colorization with Diffusion Prior (Wang et al., 2024).**
 
-This paper provides an image colorization solution (inference:) which intakes greyscale images and textual directions.
-For training - they use a pre-trained image generation diffusion model, and fine tune it with a tweaked architacture:
-The tweak introduces luminance conditioning in the reconstruction process by essentially concatenating the greyscale image to the intermidiate result before each pass.
+This paper provides an image colorization solution (at inference time) which takes grayscale images and textual directions as input.
+For training, they use a pre-trained image generation diffusion model and fine-tune it with a tweaked architecture.
+The tweak introduces luminance conditioning in the reconstruction process by essentially concatenating the grayscale image to the intermediate result before each diffusion step.
 
 However, an important observation from this work is that **luminance is guided, not preserved by construction**. The diffusion process itself still uses standard Gaussian noise on latent representations that mix luminance and color, and luminance consistency is enforced indirectly through conditioning and decoder design.
 
@@ -32,28 +32,28 @@ This raises a natural question:
 
 
 ## Project Suggestion
-We suggest performing a quantitative comparison between diffusion models that utilize different techniques for using the greyscale image as a prior - aiming to answer Q1.
+We suggest performing a quantitative comparison between diffusion models that utilize different techniques for using the grayscale image as a prior, aiming to answer Q1.
 
-Additionally, the specific approach were diffusion is applied **only to chrominance channels**, while keeping the luminance channel fixed will be examined - aiming to answer Q2.
+Additionally, the specific approach where diffusion is applied **only to chrominance channels**, while keeping the luminance channel fixed, will be examined, aiming to answer Q2.
 
 
 ## Method Overview
-While it's too early to decide on specific methodology, we imagine answering Q2 might look like:
+While it is too early to decide on a specific methodology, we imagine answering Q2 might look like:
 - Pick one of the following:
-    * Taking a pre-trained image generation stable-diffusion model and adapting it to a form where only luminance is provided to it.
+    * Taking a pre-trained image generation Stable Diffusion model and adapting it to a form where only luminance is provided to it.
     * Training a model from scratch.
-- Traning/Fine-tuning it, iteratively:
+- Training/Fine-tuning it iteratively:
     * Take a colored image.
     * Apply noise in the chrominance space to the image (luminance fixed).
     * Require the model to restore colors.
 
-Wether we use a base-model or not - it will be structurally incapable of modifying the luminance.
+Whether we use a base model or not, it will be structurally incapable of modifying the luminance.
 
 For inference:
-- Take a greyscale image.
+- Take a grayscale image.
 - Apply noise in the chrominance space to it.
 - Apply the model to it iteratively.
 
 ## Practical Notes
 We have struggled to find a reference paper with an implementation that is actually accessible.
-This might mean our work will be based on a different work to ensure this project maintains a resonable scale and does not turn into a coding project.
+This might mean that our work will be based on a different reference to ensure this project maintains a reasonable scale and does not turn into a coding-focused project.
