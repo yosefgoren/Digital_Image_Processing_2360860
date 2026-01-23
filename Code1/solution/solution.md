@@ -1,4 +1,8 @@
 # General Notes
+###  Submitters
+* Igal Spektor: 214146896
+* Yosef Goren: 211515606
+
 ### The `sol.py` file.
 The solution to the whole exercise is given in the `sol.py` file.
 The parts of the exercise are seperated and are in-order.
