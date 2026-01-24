@@ -25,9 +25,7 @@ def content_loss(content_weight, content_current, content_original):
     - scalar content loss
     """
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
+    return content_weight * torch.sum((content_current - content_original)**2)
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
 def gram_matrix(features, normalize=True):
@@ -45,9 +43,14 @@ def gram_matrix(features, normalize=True):
       (optionally normalized) Gram matrices for the N input images.
     """
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
+    N, C, H, W = features.shape
+    F = features.view(N, C, H*W)
+    gram = torch.bmm(F, F.transpose(1, 2))
+    
+    if normalize:
+      gram = gram / (C*H*W)
+    
+    return gram
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
 # Now put it together in the style_loss function...
@@ -72,9 +75,12 @@ def style_loss(feats, style_layers, style_targets, style_weights):
     # Hint: you can do this with one for loop over the style layers, and should
     # not be very much code (~5 lines). You will need to use your gram_matrix function.
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
+    assert len(style_layers) == len(style_targets) == len(style_weights)
+    return sum([
+      weight * torch.sum((gram_matrix(feats[layer])-target)**2)
+      for layer, target, weight
+      in zip(style_layers, style_targets, style_weights)
+    ])
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
 def tv_loss(img, tv_weight):
@@ -91,8 +97,9 @@ def tv_loss(img, tv_weight):
     """
     # Your implementation should be vectorized and not require any loops!
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
+    h_diff = img[:, :, 1:, :] - img[:, :, :-1, :]
+    w_diff = img[:, :, :, 1:] - img[:, :, :, :-1]
+    return tv_weight * (torch.sum(h_diff**2) + torch.sum(w_diff**2))
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 def preprocess(img, size=512):
