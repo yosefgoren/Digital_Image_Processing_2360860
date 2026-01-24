@@ -214,10 +214,14 @@ def main(resume: Optional[int]):
             print(f"Warning: Model weights not found at {model_path}, starting with fresh weights")
     
     # Set up loss function
-    if spec.loss_function == "L1Loss":
-        criterion = nn.L1Loss()
-    else:
+    loss_functions = {
+        "L1Loss": nn.L1Loss(),
+        "MSELoss": nn.MSELoss(),
+    }
+    if not spec.loss_function in loss_functions:
         raise ValueError(f"Unsupported loss function: {spec.loss_function}")
+    else:
+        criterion = loss_functions[spec.loss_function]
     
     # Set up optimizer
     if spec.optimizer == "Adam":
@@ -231,16 +235,10 @@ def main(resume: Optional[int]):
         
         model.train()
         train_loss = 0.0
-        total_load_time = 0.0
-        total_h2d_time = 0.0
-        total_step_time = 0.0
 
         train_start_time = time.time()
-        t0 = time.time()
         for noisy, clean in train_loader:
-            t1 = time.time()
             noisy, clean = noisy.to(device, non_blocking=True), clean.to(device, non_blocking=True)
-            t2 = time.time()
 
             optimizer.zero_grad()
             output = model(noisy)
@@ -248,19 +246,7 @@ def main(resume: Optional[int]):
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
-            t3 = time.time()
 
-            load_time = t1 - t0
-            h2d_time = t2 - t1
-            step_time = t3 - t2
-            
-            total_load_time += load_time
-            total_h2d_time += h2d_time
-            total_step_time += step_time
-
-            print(f"load: {load_time:.3f}s | h2d: {h2d_time:.3f}s | step: {step_time:.3f}s")
-
-            t0 = time.time()
         train_time = time.time() - train_start_time
 
         model.eval()
