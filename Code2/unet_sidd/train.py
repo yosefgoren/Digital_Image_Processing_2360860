@@ -7,7 +7,8 @@ import torch.optim as optim
 import os
 import resource
 import json
-from typing import List
+from typing import List, Optional, Tuple
+import click
 from datasets.sidd import SIDDPatchDataset
 from models.unet import UNet
 from utils import collect_sidd_pairs, split_dataset
@@ -18,7 +19,8 @@ from metrics import (
     EpochMetrics, 
     TrainingSpecification, 
     TrainingRun,
-    get_next_results_dir
+    get_next_results_dir,
+    get_existing_results_dir
 )
 
 
@@ -75,12 +77,87 @@ def load_training_specification() -> TrainingSpecification:
     return TrainingSpecification(**spec_dict)
 
 
-def main():
+def load_previous_training_run(results_dir: Path) -> Tuple[TrainingRun, int]:
+    """Load previous training run from results directory.
+    
+    Returns:
+        Tuple of (TrainingRun, last_completed_epoch)
+    """
+    metrics_file = results_dir / "metrics.json"
+    if not metrics_file.exists():
+        raise FileNotFoundError(f"Metrics file not found in {results_dir}")
+    
+    with open(metrics_file, 'r') as f:
+        data = json.load(f)
+    
+    # Handle both old format (list) and new format (TrainingRun)
+    if isinstance(data, dict) and 'epochs' in data and 'specification' in data:
+        training_run = TrainingRun(**data)
+    elif isinstance(data, list):
+        # Old format - need to load spec from file
+        spec = load_training_specification()
+        epochs = [EpochMetrics(**m) for m in data]
+        training_run = TrainingRun(specification=spec, epochs=epochs)
+    else:
+        raise ValueError("Invalid metrics file format!")
+    
+    # Find last completed epoch
+    if training_run.epochs:
+        last_epoch = max(m.epoch for m in training_run.epochs)
+    else:
+        last_epoch = 0
+    
+    return training_run, last_epoch
+
+
+def save_checkpoint(results_dir: Path, model: torch.nn.Module, training_run: TrainingRun):
+    """Save checkpoint (weights and metrics)."""
+    # Save model weights
+    model_path = results_dir / "unet_sidd.pth"
+    torch.save(model.state_dict(), model_path)
+    
+    # Save metrics
+    with open(results_dir / "metrics.json", "w") as f:
+        json.dump(training_run.model_dump(), f, indent=2)
+
+
+@click.command()
+@click.option('--resume', type=int, default=None, 
+              help='Resume training from results directory with this index')
+def main(resume: Optional[int]):
     hard_limit_memory_usage()
     
-    # Load training specification
-    spec = load_training_specification()
-    print(f"Loaded training specification: {spec.model_dump_json(indent=2)}")
+    # Determine if resuming or starting new training
+    if resume is not None:
+        # Resume from previous training
+        results_dir = get_existing_results_dir(resume)
+        print(f"Resuming training from: {results_dir}")
+        
+        # Load previous training run
+        previous_run, last_epoch = load_previous_training_run(results_dir)
+        spec = previous_run.specification
+        all_metrics = previous_run.epochs.copy()
+        
+        print(f"Previous training: {len(all_metrics)} epochs completed (last: {last_epoch})")
+        print(f"Target epochs: {spec.epochs}")
+        
+        # Check if training is already complete
+        if last_epoch >= spec.epochs:
+            print(f"Training already complete! All {spec.epochs} epochs have been completed.")
+            return
+        
+        start_epoch = last_epoch
+        print(f"Resuming from epoch {start_epoch + 1} to {spec.epochs}")
+    else:
+        # Start new training
+        spec = load_training_specification()
+        print(f"Starting new training with specification: {spec.model_dump_json(indent=2)}")
+        
+        results_dir = get_next_results_dir()
+        print(f"Saving results to: {results_dir}")
+        
+        all_metrics: List[EpochMetrics] = []
+        start_epoch = 0
     
     root = Path(spec.dataset_path)
 
@@ -90,10 +167,6 @@ def main():
         pairs = pairs[:spec.max_image_pairs]
     
     train_pairs, val_pairs, _ = split_dataset(pairs)
-
-    # Get results directory
-    results_dir = get_next_results_dir()
-    print(f"Saving results to: {results_dir}")
 
     # Load sample patch from first image pair for visualization
     # Extract a single patch from the center of the image for consistent visualization
@@ -131,6 +204,15 @@ def main():
 
     model = UNet().to(device)
     
+    # Load weights if resuming
+    if resume is not None:
+        model_path = results_dir / "unet_sidd.pth"
+        if model_path.exists():
+            model.load_state_dict(torch.load(model_path, map_location=device))
+            print(f"Loaded model weights from {model_path}")
+        else:
+            print(f"Warning: Model weights not found at {model_path}, starting with fresh weights")
+    
     # Set up loss function
     if spec.loss_function == "L1Loss":
         criterion = nn.L1Loss()
@@ -143,10 +225,8 @@ def main():
     else:
         raise ValueError(f"Unsupported optimizer: {spec.optimizer}")
 
-    # List to store all epoch metrics
-    all_metrics: List[EpochMetrics] = []
-
-    for epoch in range(spec.epochs):
+    # Training loop
+    for epoch in range(start_epoch, spec.epochs):
         epoch_start_time = time.time()
         
         model.train()
@@ -233,16 +313,21 @@ def main():
         )
         all_metrics.append(metrics)
 
-        # Save JSON file after each epoch (overwrite with updated TrainingRun)
+        # Create training run object
         training_run = TrainingRun(specification=spec, epochs=all_metrics)
-        with open(results_dir / "metrics.json", "w") as f:
-            json.dump(training_run.model_dump(), f, indent=2)
+        
+        # Save checkpoint if it's time (based on checkpoint_frequency)
+        current_epoch_num = epoch + 1
+        if current_epoch_num % spec.checkpoint_frequency == 0 or current_epoch_num == spec.epochs:
+            save_checkpoint(results_dir, model, training_run)
+            print(f"Checkpoint saved at epoch {current_epoch_num}")
 
-    # Save model weights to results directory
-    model_path = results_dir / "unet_sidd.pth"
-    torch.save(model.state_dict(), model_path)
+    # Final save (in case checkpoint_frequency didn't catch the last epoch)
+    training_run = TrainingRun(specification=spec, epochs=all_metrics)
+    save_checkpoint(results_dir, model, training_run)
+    
     print(f"\nTraining complete! Results saved to: {results_dir}")
-    print(f"Model weights saved to: {model_path}")
+    print(f"Model weights saved to: {results_dir / 'unet_sidd.pth'}")
 
 
 if __name__ == "__main__":

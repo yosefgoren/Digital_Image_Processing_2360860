@@ -16,6 +16,7 @@ class TrainingSpecification(BaseModel):
     device: str = "xpu"
     dataset_path: str
     max_image_pairs: Optional[int] = None  # None means use all pairs
+    checkpoint_frequency: int = 1  # Save checkpoint every N epochs
 
 
 class EpochMetrics(BaseModel):
