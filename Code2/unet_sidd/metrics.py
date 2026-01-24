@@ -1,5 +1,6 @@
 from pathlib import Path
 from pydantic import BaseModel
+from typing import *
 
 class EpochMetrics(BaseModel):
     """Pydantic model for epoch metrics."""
@@ -13,24 +14,24 @@ class EpochMetrics(BaseModel):
     total_h2d_time: float
     total_step_time: float
 
+def get_results_basedir() -> str:
+    return "./results"
+
+def get_max_results_idx() -> int:
+    results_base = Path(get_results_basedir())
+    results_base.mkdir(exist_ok=True)
+    return max([int(entry.name) for entry in results_base.iterdir() if entry.name.isdecimal()])
+
+def get_existing_results_dir(results_idx: Optional[int] = None) -> Path:
+    if results_idx is None:
+        results_idx = get_max_results_idx()
+
+    res = Path(f"{get_results_basedir()}/{results_idx}")
+    assert res.is_dir()
+    return res
 
 def get_next_results_dir() -> Path:
-    """Get the lowest available results directory number."""
-    results_base = Path("./results")
-    results_base.mkdir(exist_ok=True)
-    
-    # Find the lowest available number
-    existing_dirs = set()
-    for item in results_base.iterdir():
-        if item.is_dir() and item.name.isdigit():
-            existing_dirs.add(int(item.name))
-    
-    # Find the lowest number that doesn't exist
-    next_num = 0
-    while next_num in existing_dirs:
-        next_num += 1
-    
-    results_dir = results_base / str(next_num)
+    results_dir = Path(f"{get_results_basedir()}/{get_max_results_idx()+1}")
     results_dir.mkdir(exist_ok=True)
     return results_dir
 

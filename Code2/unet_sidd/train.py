@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
@@ -16,9 +17,9 @@ import time
 from metrics import EpochMetrics, get_next_results_dir
 
 PATCH_SIZE = 128
-PATCHES_PER_IMAGE = 4
+PATCHES_PER_IMAGE = 32
 BATCH_SIZE = 16
-EPOCHS = 8
+EPOCHS = 32
 
 
 def save_image_tensor(tensor: torch.Tensor, path: Path):
@@ -63,7 +64,7 @@ def main():
     
     root = Path(get_dataset_basepath())
 
-    pairs = collect_sidd_pairs(root)[:40]
+    pairs = collect_sidd_pairs(root)[:100]
     train_pairs, val_pairs, _ = split_dataset(pairs)
 
     # Get results directory
