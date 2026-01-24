@@ -17,9 +17,9 @@ import time
 from metrics import EpochMetrics, get_next_results_dir
 
 PATCH_SIZE = 128
-PATCHES_PER_IMAGE = 32
-BATCH_SIZE = 16
-EPOCHS = 32
+PATCHES_PER_IMAGE = 4
+BATCH_SIZE = 32
+EPOCHS = 8
 
 
 def save_image_tensor(tensor: torch.Tensor, path: Path):
@@ -71,19 +71,29 @@ def main():
     results_dir = get_next_results_dir()
     print(f"Saving results to: {results_dir}")
 
-    # Load sample image (pairs[0]) for visualization
-    # Resize to a reasonable size to avoid GPU OOM (full images are too large)
-    VISUALIZATION_SIZE = 512  # Resize to 512x512 for visualization
+    # Load sample patch from first image pair for visualization
+    # Extract a single patch from the center of the image for consistent visualization
     sample_noisy_path, sample_clean_path = pairs[0]
     to_tensor = transforms.ToTensor()
-    resize_transform = transforms.Resize((VISUALIZATION_SIZE, VISUALIZATION_SIZE), antialias=True)
     
     sample_noisy_img = Image.open(sample_noisy_path).convert("RGB")
     sample_clean_img = Image.open(sample_clean_path).convert("RGB")
     
-    # Resize and convert to tensor
-    sample_noisy_full = to_tensor(resize_transform(sample_noisy_img))
-    sample_clean_full = to_tensor(resize_transform(sample_clean_img))
+    # Convert to tensor
+    sample_noisy_full = to_tensor(sample_noisy_img)
+    sample_clean_full = to_tensor(sample_clean_img)
+    
+    # Extract a patch from the center of the image
+    _, h, w = sample_noisy_full.shape
+    ps = PATCH_SIZE
+    
+    # Calculate center patch coordinates
+    center_x = (w - ps) // 2
+    center_y = (h - ps) // 2
+    
+    # Extract center patches
+    sample_noisy_patch = sample_noisy_full[:, center_y:center_y+ps, center_x:center_x+ps]
+    sample_clean_patch = sample_clean_full[:, center_y:center_y+ps, center_x:center_x+ps]
 
     train_ds = SIDDPatchDataset(train_pairs, PATCH_SIZE, PATCHES_PER_IMAGE)
     val_ds = SIDDPatchDataset(val_pairs, PATCH_SIZE, PATCHES_PER_IMAGE)
@@ -161,22 +171,18 @@ def main():
             f"Val {avg_val_loss:.4f}"
         )
 
-        # Generate sample denoised image
+        # Generate sample denoised patch
         model.eval()
-        # Clear GPU cache before processing sample image to free up memory
-        torch.xpu.empty_cache()
         with torch.no_grad():
             # Add batch dimension and move to device
-            sample_noisy_batch = sample_noisy_full.unsqueeze(0).to(device)
+            sample_noisy_batch = sample_noisy_patch.unsqueeze(0).to(device)
             sample_denoised_batch = model(sample_noisy_batch)
-            sample_denoised_full = sample_denoised_batch.squeeze(0).cpu()
-            # Clear cache after processing
-            torch.xpu.empty_cache()
+            sample_denoised_patch = sample_denoised_batch.squeeze(0).cpu()
 
-        # Save sample images
-        save_image_tensor(sample_noisy_full, results_dir / f"{epoch+1}_noisy.png")
-        save_image_tensor(sample_denoised_full, results_dir / f"{epoch+1}_denoised.png")
-        save_image_tensor(sample_clean_full, results_dir / f"{epoch+1}_clean.png")
+        # Save sample patch images
+        save_image_tensor(sample_noisy_patch, results_dir / f"{epoch+1}_noisy.png")
+        save_image_tensor(sample_denoised_patch, results_dir / f"{epoch+1}_denoised.png")
+        save_image_tensor(sample_clean_patch, results_dir / f"{epoch+1}_clean.png")
 
         # Create and store metrics
         metrics = EpochMetrics(
@@ -196,8 +202,11 @@ def main():
         with open(results_dir / "metrics.json", "w") as f:
             json.dump([m.model_dump() for m in all_metrics], f, indent=2)
 
-    torch.save(model.state_dict(), "unet_sidd.pth")
+    # Save model weights to results directory
+    model_path = results_dir / "unet_sidd.pth"
+    torch.save(model.state_dict(), model_path)
     print(f"\nTraining complete! Results saved to: {results_dir}")
+    print(f"Model weights saved to: {model_path}")
 
 
 if __name__ == "__main__":
