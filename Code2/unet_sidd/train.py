@@ -235,10 +235,16 @@ def main(resume: Optional[int]):
         
         model.train()
         train_loss = 0.0
+        total_load_time = 0.0
+        total_h2d_time = 0.0
+        total_step_time = 0.0
 
         train_start_time = time.time()
+        t0 = time.time()
         for noisy, clean in train_loader:
+            t1 = time.time()
             noisy, clean = noisy.to(device, non_blocking=True), clean.to(device, non_blocking=True)
+            t2 = time.time()
 
             optimizer.zero_grad()
             output = model(noisy)
@@ -246,7 +252,19 @@ def main(resume: Optional[int]):
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
+            t3 = time.time()
 
+            load_time = t1 - t0
+            h2d_time = t2 - t1
+            step_time = t3 - t2
+            
+            total_load_time += load_time
+            total_h2d_time += h2d_time
+            total_step_time += step_time
+
+            print(f"load: {load_time:.3f}s | h2d: {h2d_time:.3f}s | step: {step_time:.3f}s")
+
+            t0 = time.time()
         train_time = time.time() - train_start_time
 
         model.eval()
