@@ -4,21 +4,51 @@ from torch.utils.data import DataLoader
 import torch.nn as nn
 import torch.optim as optim
 import os
+import resource
 from datasets.sidd import SIDDPatchDataset
 from models.unet import UNet
 from utils import collect_sidd_pairs, split_dataset
 import time
 
 PATCH_SIZE = 128
-PATCHES_PER_IMAGE = 2
+PATCHES_PER_IMAGE = 4
 BATCH_SIZE = 64
 EPOCHS = 32
 
+def get_dataset_basepath() -> str:
+    return "/home/yogo/media/Datasets/SIDD_Small_sRGB_Only/Data"
+    return f"{os.path.dirname(__file__)}/datasets/sidd_tmpfs/Data"
+
+def hard_limit_memory_usage():
+    memory_limit_gb = 32
+    memory_limit_bytes = memory_limit_gb * (1024**3)
+    
+    try:
+        # Set virtual address space limit (RLIMIT_AS)
+        # When exceeded, the process will be killed by the OOM killer
+        resource.setrlimit(resource.RLIMIT_AS, (memory_limit_bytes, memory_limit_bytes))
+        print(f"Memory limit set to {memory_limit_gb}GB - process will be killed if exceeded")
+    except (ValueError, OSError) as e:
+        print(f"Warning: Could not set memory limit: {e}")
+        raise e
+    
+    # Also adjust OOM score to make this process more likely to be killed
+    # Higher score = more likely to be killed by OOM killer
+    try:
+        oom_score_adj = 1000  # High priority for OOM killer (range: -1000 to 1000)
+        with open(f"/proc/self/oom_score_adj", "w") as f:
+            f.write(str(oom_score_adj))
+        print(f"OOM score adjusted to {oom_score_adj} (higher = more likely to be killed)")
+    except (IOError, OSError) as e:
+        print(f"Warning: Could not adjust OOM score: {e}")
+        raise e
 
 def main():
-    root = Path(f"{os.path.dirname(__file__)}/datasets/sidd_tmpfs/Data")
+    hard_limit_memory_usage()
+    
+    root = Path(get_dataset_basepath())
 
-    pairs = collect_sidd_pairs(root)
+    pairs = collect_sidd_pairs(root)[:100]
     train_pairs, val_pairs, _ = split_dataset(pairs)
 
     train_ds = SIDDPatchDataset(train_pairs, PATCH_SIZE, PATCHES_PER_IMAGE)
