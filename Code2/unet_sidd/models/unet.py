@@ -7,13 +7,13 @@ class DoubleConv(nn.Module):
     def __init__(self, in_ch: int, out_ch: int):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, 3, padding=1),
+            nn.Conv2d(in_ch, out_ch, 3, padding=1, bias=True),
             nn.ReLU(inplace=True),
-            nn.Conv2d(out_ch, out_ch, 3, padding=1),
+            nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=True),
             nn.ReLU(inplace=True),
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
 
 
@@ -41,9 +41,14 @@ class UNet(nn.Module):
         self.up1 = nn.ConvTranspose2d(128, 64, 2, stride=2)
         self.conv1 = DoubleConv(128, 64)
 
-        self.out = nn.Conv2d(64, out_channels, 1)
+        self.out = nn.Conv2d(64, out_channels, 1, bias=True)
 
-    def forward(self, x):
+        # Strongly recommended for residual denoising
+        nn.init.zeros_(self.out.bias)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        identity = x  # preserve color + low frequencies
+
         d1 = self.down1(x)
         d2 = self.down2(self.pool1(d1))
         d3 = self.down3(self.pool2(d2))
@@ -54,4 +59,7 @@ class UNet(nn.Module):
         u2 = self.conv2(torch.cat([self.up2(u3), d2], dim=1))
         u1 = self.conv1(torch.cat([self.up1(u2), d1], dim=1))
 
-        return self.out(u1)
+        noise = self.out(u1)
+
+        # Residual output
+        return identity - noise
