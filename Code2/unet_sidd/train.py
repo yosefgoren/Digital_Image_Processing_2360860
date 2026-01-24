@@ -14,12 +14,12 @@ from utils import collect_sidd_pairs, split_dataset
 from torchvision import transforms
 from PIL import Image
 import time
-from metrics import EpochMetrics, get_next_results_dir
-
-PATCH_SIZE = 128
-PATCHES_PER_IMAGE = 4
-BATCH_SIZE = 32
-EPOCHS = 8
+from metrics import (
+    EpochMetrics, 
+    TrainingSpecification, 
+    TrainingRun,
+    get_next_results_dir
+)
 
 
 def save_image_tensor(tensor: torch.Tensor, path: Path):
@@ -59,12 +59,36 @@ def hard_limit_memory_usage():
         print(f"Warning: Could not adjust OOM score: {e}")
         raise e
 
+def load_training_specification() -> TrainingSpecification:
+    """Load training specification from training_specification.json."""
+    spec_file = Path("training_specification.json")
+    
+    if not spec_file.exists():
+        raise FileNotFoundError(
+            f"Training specification file '{spec_file}' not found. "
+            "Please create this file with the required hyperparameters."
+        )
+    
+    with open(spec_file, 'r') as f:
+        spec_dict = json.load(f)
+    
+    return TrainingSpecification(**spec_dict)
+
+
 def main():
     hard_limit_memory_usage()
     
-    root = Path(get_dataset_basepath())
+    # Load training specification
+    spec = load_training_specification()
+    print(f"Loaded training specification: {spec.model_dump_json(indent=2)}")
+    
+    root = Path(spec.dataset_path)
 
-    pairs = collect_sidd_pairs(root)[:100]
+    # Collect image pairs
+    pairs = collect_sidd_pairs(root)
+    if spec.max_image_pairs is not None:
+        pairs = pairs[:spec.max_image_pairs]
+    
     train_pairs, val_pairs, _ = split_dataset(pairs)
 
     # Get results directory
@@ -85,7 +109,7 @@ def main():
     
     # Extract a patch from the center of the image
     _, h, w = sample_noisy_full.shape
-    ps = PATCH_SIZE
+    ps = spec.patch_size
     
     # Calculate center patch coordinates
     center_x = (w - ps) // 2
@@ -95,23 +119,34 @@ def main():
     sample_noisy_patch = sample_noisy_full[:, center_y:center_y+ps, center_x:center_x+ps]
     sample_clean_patch = sample_clean_full[:, center_y:center_y+ps, center_x:center_x+ps]
 
-    train_ds = SIDDPatchDataset(train_pairs, PATCH_SIZE, PATCHES_PER_IMAGE)
-    val_ds = SIDDPatchDataset(val_pairs, PATCH_SIZE, PATCHES_PER_IMAGE)
+    train_ds = SIDDPatchDataset(train_pairs, spec.patch_size, spec.patches_per_image)
+    val_ds = SIDDPatchDataset(val_pairs, spec.patch_size, spec.patches_per_image)
 
-    train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE)
+    train_loader = DataLoader(train_ds, batch_size=spec.batch_size, shuffle=True)
+    val_loader = DataLoader(val_ds, batch_size=spec.batch_size)
 
-    device = torch.device("xpu")
-    assert torch.xpu.is_available()
+    device = torch.device(spec.device)
+    if spec.device == "xpu":
+        assert torch.xpu.is_available()
 
     model = UNet().to(device)
-    criterion = nn.L1Loss()
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    
+    # Set up loss function
+    if spec.loss_function == "L1Loss":
+        criterion = nn.L1Loss()
+    else:
+        raise ValueError(f"Unsupported loss function: {spec.loss_function}")
+    
+    # Set up optimizer
+    if spec.optimizer == "Adam":
+        optimizer = optim.Adam(model.parameters(), lr=spec.learning_rate)
+    else:
+        raise ValueError(f"Unsupported optimizer: {spec.optimizer}")
 
     # List to store all epoch metrics
     all_metrics: List[EpochMetrics] = []
 
-    for epoch in range(EPOCHS):
+    for epoch in range(spec.epochs):
         epoch_start_time = time.time()
         
         model.train()
@@ -198,9 +233,10 @@ def main():
         )
         all_metrics.append(metrics)
 
-        # Save JSON file after each epoch (overwrite with updated list)
+        # Save JSON file after each epoch (overwrite with updated TrainingRun)
+        training_run = TrainingRun(specification=spec, epochs=all_metrics)
         with open(results_dir / "metrics.json", "w") as f:
-            json.dump([m.model_dump() for m in all_metrics], f, indent=2)
+            json.dump(training_run.model_dump(), f, indent=2)
 
     # Save model weights to results directory
     model_path = results_dir / "unet_sidd.pth"

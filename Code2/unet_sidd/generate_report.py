@@ -32,9 +32,21 @@ def generate_report(results_idx: Optional[int]):
     if not metrics_file.exists():
         raise click.ClickException(f"Metrics file {metrics_file} does not exist!")
     
-    # Load metrics
+    # Load metrics - handle both old format (list) and new format (TrainingRun)
     with open(metrics_file, 'r') as f:
-        metrics = json.load(f)
+        data = json.load(f)
+    
+    # Check if it's the new TrainingRun format or old list format
+    if isinstance(data, dict) and 'epochs' in data and 'specification' in data:
+        # New TrainingRun format
+        metrics = data['epochs']
+        specification = data['specification']
+    elif isinstance(data, list):
+        # Old format (list of metrics)
+        metrics = data
+        specification = None
+    else:
+        raise click.ClickException("Invalid metrics file format!")
     
     if not metrics:
         raise click.ClickException("No metrics found in the JSON file!")

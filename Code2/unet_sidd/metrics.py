@@ -1,6 +1,22 @@
 from pathlib import Path
 from pydantic import BaseModel
-from typing import *
+from typing import List, Optional
+
+
+class TrainingSpecification(BaseModel):
+    """Pydantic model for training hyperparameters and configuration."""
+    patch_size: int
+    patches_per_image: int
+    batch_size: int
+    epochs: int
+    learning_rate: float
+    optimizer: str = "Adam"
+    loss_function: str = "L1Loss"
+    model_type: str = "UNet"
+    device: str = "xpu"
+    dataset_path: str
+    max_image_pairs: Optional[int] = None  # None means use all pairs
+
 
 class EpochMetrics(BaseModel):
     """Pydantic model for epoch metrics."""
@@ -14,13 +30,19 @@ class EpochMetrics(BaseModel):
     total_h2d_time: float
     total_step_time: float
 
+
+class TrainingRun(BaseModel):
+    """Master Pydantic model containing training specification and epoch metrics."""
+    specification: TrainingSpecification
+    epochs: List[EpochMetrics]
+
 def get_results_basedir() -> str:
     return "./results"
 
 def get_max_results_idx() -> int:
     results_base = Path(get_results_basedir())
     results_base.mkdir(exist_ok=True)
-    return max([int(entry.name) for entry in results_base.iterdir() if entry.name.isdecimal()])
+    return max([0] + [int(entry.name) for entry in results_base.iterdir() if entry.name.isdecimal()])
 
 def get_existing_results_dir(results_idx: Optional[int] = None) -> Path:
     if results_idx is None:
