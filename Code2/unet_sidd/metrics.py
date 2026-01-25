@@ -102,12 +102,12 @@ def get_existing_results_dir(results_idx: Optional[int] = None) -> Path:
     if results_idx is None:
         results_idx = get_max_results_idx()
 
-    res = Path(f"{get_results_basedir()}/{results_idx}")
+    res = Path(f"{get_results_basedir()}") / f"{results_idx}"
     assert res.is_dir()
     return res
 
 def get_next_results_dir() -> Path:
-    results_dir = Path(f"{get_results_basedir()}/{get_max_results_idx()+1}")
+    results_dir = Path(f"{get_results_basedir()}" / f"{get_max_results_idx()+1}")
     results_dir.mkdir(exist_ok=True)
     return results_dir
 
