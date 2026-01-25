@@ -33,9 +33,8 @@ class EpochMetrics(BaseModel):
 
 
 class TrainingRun(BaseModel):
-    """Master Pydantic model containing training specification and epoch metrics."""
     specification: TrainingSpecification
-    epochs: List[EpochMetrics]
+    epochs: List[EpochMetrics] = []
 
 def get_results_basedir() -> str:
     return "./results"
