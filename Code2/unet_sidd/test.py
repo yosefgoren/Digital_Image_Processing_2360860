@@ -93,17 +93,9 @@ def extract_center_patch(tensor: torch.Tensor, patch_size: int) -> torch.Tensor:
 
 
 @click.command()
-@click.option('--results_idx', type=int, default=None,
-              help='Results directory index (default: latest)')
-@click.option('--num_images', type=int, default=5,
-              help='Number of test images to process (default: 5)')
+@click.option('--results_idx', type=int, default=None, help='Results directory index (default: latest)')
+@click.option('--num_images', type=int, default=5, help='Number of test images to process (default: 5)')
 def test_model(results_idx: Optional[int], num_images: int):
-    """Test a trained model on full images and generate a PDF report.
-    
-    Loads model weights from results directory and processes full images
-    using a sliding window approach.
-    """
-    # Get results directory
     results_dir = get_existing_results_dir(results_idx)
     print(f"Loading model from: {results_dir}")
     

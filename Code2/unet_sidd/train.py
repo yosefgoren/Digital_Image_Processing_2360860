@@ -7,7 +7,7 @@ import torch.optim as optim
 import os
 import resource
 import json
-from typing import List, Optional, Tuple
+from typing import *
 import click
 from datasets.sidd import SIDDPatchDataset
 from models.unet import UNet
@@ -15,19 +15,14 @@ from utils import collect_sidd_pairs, split_dataset
 from torchvision import transforms
 from PIL import Image
 import time
-from metrics import (
-    EpochMetrics, 
-    TrainingSpecification, 
-    TrainingRun,
-    get_next_results_dir,
-    get_existing_results_dir
-)
+from metrics import *
 
 def save_image_tensor(tensor: torch.Tensor, path: Path):
     """Save a tensor image to PNG file."""
     to_pil = transforms.ToPILImage()
     tensor = torch.clamp(tensor, 0, 1)
     pil_image = to_pil(tensor.cpu())
+    print(f"Saving image tensor to: {path.name}")
     pil_image.save(path)
 
 def hard_limit_memory_usage():
@@ -41,63 +36,6 @@ def hard_limit_memory_usage():
         f.write(str(oom_score_adj))
     print(f"OOM score adjusted to {oom_score_adj} (higher = more likely to be killed)")
     
-def load_training_specification() -> TrainingSpecification:
-    spec_file = Path("training_specification.json")
-    
-    if not spec_file.exists():
-        raise FileNotFoundError(f"Missing specification file '{spec_file}' not found. Please create and fill it.")
-    
-    with open(spec_file, 'r') as f:
-        spec_dict = json.load(f)
-    
-    return TrainingSpecification(**spec_dict)
-
-def load_previous_training_run(results_dir: Path) -> TrainingRun:
-    metrics_file = results_dir / "metrics.json"
-    if not metrics_file.exists():
-        raise FileNotFoundError(f"Metrics file not found in {results_dir}")
-    
-    with open(metrics_file, 'r') as f:
-        return TrainingRun.model_validate_json(f.read())
-
-
-def save_checkpoint(results_dir: Path, model: torch.nn.Module, training_run: TrainingRun):
-    """Save checkpoint (weights and metrics)."""
-    model_path = results_dir / "unet_sidd.pth"
-    torch.save(model.state_dict(), model_path)
-
-    with open(results_dir / "metrics.json", "w") as f:
-        json.dump(training_run.model_dump(), f, indent=2)
-
-
-def init_session(resume: Optional[int]) -> tuple[TrainingRun, int, Path]:
-    if resume is not None:
-        results_dir = get_existing_results_dir(resume)
-        print(f"Resuming training from: {results_dir}")
-        
-        previous_run = load_previous_training_run(results_dir)
-        last_epoch = max([0, len(previous_run.epochs)])
-        spec = previous_run.specification
-        all_metrics = previous_run.epochs.copy()
-        
-        print(f"Previous training: {len(all_metrics)} epochs completed (last: {last_epoch})")
-        print(f"Target epochs: {spec.epochs}")
-        
-        if last_epoch >= spec.epochs:
-            raise RuntimeError(f"Training already complete! All {spec.epochs} epochs have been completed.")
-        
-        start_epoch = last_epoch
-        print(f"Resuming from epoch {start_epoch + 1} to {spec.epochs}")
-        return previous_run, start_epoch, results_dir
-    
-    else:
-        spec = load_training_specification()
-        print(f"Starting new training with specification: {spec.model_dump_json(indent=2)}")
-        
-        results_dir = get_next_results_dir()
-        print(f"Saving results to: {results_dir}")
-
-        return TrainingRun(specification=spec), 0, results_dir
 
 def get_center_patch_from_image_path(path: Path, patch_size: int) -> torch.Tensor:
     sample_image = Image.open(path).convert("RGB")
@@ -116,8 +54,8 @@ def get_center_patch_from_image_path(path: Path, patch_size: int) -> torch.Tenso
 @click.option('--resume', type=int, default=None, help='Resume training from results directory with this index')
 def main(resume: Optional[int]):
     hard_limit_memory_usage()
-    run, start_epoch, results_dir = init_session(resume)
-    spec = run.specification
+    db = TrainingDB(resume)
+    spec = db.run.specification
 
     root = Path(spec.dataset_path)
 
@@ -145,7 +83,7 @@ def main(resume: Optional[int]):
     
     # Load weights if resuming
     if resume is not None:
-        model_path = results_dir / "unet_sidd.pth"
+        model_path = db.get_weights_path()
         if model_path.exists():
             model.load_state_dict(torch.load(model_path, map_location=device))
             print(f"Loaded model weights from {model_path}")
@@ -153,12 +91,13 @@ def main(resume: Optional[int]):
             print(f"Warning: Model weights not found at {model_path}, starting with fresh weights")
     
     # Set up loss function
+    
     loss_functions = {
         "L1Loss": nn.L1Loss,
         "MSELoss": nn.MSELoss,
     }
     if not spec.loss_function in loss_functions:
-        raise ValueError(f"Unsupported loss function: {spec.loss_function}")
+        raise ValueError(f"Unsupported loss function: {spec.loss_function} (add it to dict?)")
     else:
         criterion = loss_functions[spec.loss_function]()
     
@@ -169,7 +108,7 @@ def main(resume: Optional[int]):
         raise ValueError(f"Unsupported optimizer: {spec.optimizer}")
 
     # Training loop
-    for epoch in range(start_epoch, spec.epochs):
+    for epoch in range(db.start_epoch, spec.epochs):
         epoch_start_time = time.time()
         
         model.train()
@@ -235,11 +174,11 @@ def main(resume: Optional[int]):
             sample_denoised_batch = model(sample_noisy_batch)
             sample_denoised_patch = sample_denoised_batch.squeeze(0).cpu()
 
-        save_image_tensor(sample_noisy_patch, results_dir / f"{epoch}_noisy.png")
-        save_image_tensor(sample_denoised_patch, results_dir / f"{epoch}_denoised.png")
-        save_image_tensor(sample_clean_patch, results_dir / f"{epoch}_clean.png")
+        save_image_tensor(sample_noisy_patch, db.get_resource_path(f"{epoch}_noisy.png"))
+        save_image_tensor(sample_denoised_patch, db.get_resource_path(f"{epoch}_denoised.png"))
+        save_image_tensor(sample_clean_patch, db.get_resource_path(f"{epoch}_clean.png"))
 
-        run.epochs.append(EpochMetrics(
+        db.run.epochs.append(EpochMetrics(
             epoch=epoch + 1,
             train_loss=avg_train_loss,
             val_loss=avg_val_loss,
@@ -252,13 +191,11 @@ def main(resume: Optional[int]):
         ))
 
         if epoch % spec.checkpoint_frequency == 0:
-            save_checkpoint(results_dir, model, run)
+            db.save_checkpoint(model)
             print(f"Checkpoint saved at epoch {epoch}")
 
-    save_checkpoint(results_dir, model, run)
-    
-    print(f"\nTraining complete! Results saved to: {results_dir}")
-    print(f"Model weights saved to: {results_dir / 'unet_sidd.pth'}")
+    db.save_checkpoint(model)
+    print(f"Training complete! Results saved.")
 
 if __name__ == "__main__":
     main()
