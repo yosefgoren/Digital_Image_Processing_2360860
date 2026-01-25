@@ -4,9 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import torch.optim as optim
-import os
 import resource
-import json
 from typing import *
 import click
 from datasets.sidd import SIDDPatchDataset
@@ -16,6 +14,7 @@ from torchvision import transforms
 from PIL import Image
 import time
 from metrics import *
+import platform
 
 def save_image_tensor(tensor: torch.Tensor, path: Path):
     """Save a tensor image to PNG file."""
@@ -25,7 +24,7 @@ def save_image_tensor(tensor: torch.Tensor, path: Path):
     print(f"Saving image tensor to: {path.name}")
     pil_image.save(path)
 
-def hard_limit_memory_usage():
+def hard_limit_memory_usage_linux():
     memory_limit_gb = 32
     memory_limit_bytes = memory_limit_gb * (1024**3)
     resource.setrlimit(resource.RLIMIT_AS, (memory_limit_bytes, memory_limit_bytes))
@@ -35,6 +34,17 @@ def hard_limit_memory_usage():
     with open(f"/proc/self/oom_score_adj", "w") as f:
         f.write(str(oom_score_adj))
     print(f"OOM score adjusted to {oom_score_adj} (higher = more likely to be killed)")
+    
+def hard_limit_memory_usage():
+    os_name = platform.system().lower().strip()
+    if os_name == "windows":
+        print("Windows: Not limiting memory usage.")
+        pass
+    elif os_name == "linux":
+        print("Linux: Limiting memory usage.")
+        hard_limit_memory_usage_linux()
+    else:
+        print(f"Unknown or unsupported operating system: `{os_name}`")
     
 
 def get_center_patch_from_image_path(path: Path, patch_size: int) -> torch.Tensor:
