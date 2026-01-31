@@ -12,19 +12,19 @@ def save_image_tensor(tensor: torch.Tensor, path: Path):
     print(f"Saving image tensor to: {path.name}")
     pil_image.save(path)
 
-def collect_sidd_pairs(root: Path) -> List[Tuple[Path, Path]]:
+def collect_sidd_pairs(root: Path) -> List[Tuple[str, str]]:
     pairs = []
 
     for scene in root.iterdir():
-        noisy = next(scene.glob("NOISY_SRGB*.PNG"))
-        clean = next(scene.glob("GT_SRGB*.PNG"))
+        noisy = str(next(scene.glob("NOISY_SRGB*.PNG")))
+        clean = str(next(scene.glob("GT_SRGB*.PNG")))
         pairs.append((noisy, clean))
 
     return pairs
 
 
 def split_dataset(
-    pairs: List[Tuple[Path, Path]],
+    pairs: List[Tuple[str, str]],
     test_images: int = 25,
     val_ratio: float = 0.1,
 ):

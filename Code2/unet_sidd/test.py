@@ -16,7 +16,7 @@ from PIL import Image
 from utils import *
 
 from models.unet import UNet
-from metrics import get_existing_results_dir
+from metrics import *
 
 def denoise_full_image(model: nn.Module, noisy_tensor: torch.Tensor, device: torch.device, patch_size: int) -> torch.Tensor:
     """Denoise a full image by processing it in overlapping patches.
@@ -82,82 +82,26 @@ def extract_center_patch(tensor: torch.Tensor, patch_size: int) -> torch.Tensor:
     return tensor[:, center_y:center_y+patch_size, center_x:center_x+patch_size]
 
 
-@click.command()
-@click.option('--results_idx', type=int, default=None, help='Results directory index (default: latest)')
-@click.option('--num_images', type=int, default=5, help='Number of test images to process (default: 5)')
-def test_model(results_idx: Optional[int], num_images: int):
-    results_dir = get_existing_results_dir(results_idx)
-    print(f"Loading model from: {results_dir}")
-    
-    # Load training run to get specification
-    metrics_file = results_dir / "metrics.json"
-    if not metrics_file.exists():
-        raise click.ClickException(f"Metrics file {metrics_file} does not exist!")
-    
-    with open(metrics_file, 'r') as f:
-        data = json.load(f)
-    
-    if isinstance(data, dict) and 'specification' in data:
-        spec_dict = data['specification']
-        patch_size = spec_dict['patch_size']
-        dataset_path = spec_dict['dataset_path']
-        device_name = spec_dict.get('device', 'xpu')
-    else:
-        raise click.ClickException("Could not find training specification in metrics.json")
-    
-    print(f"Patch size: {patch_size}")
-    print(f"Dataset path: {dataset_path}")
-    
-    # Load model weights
-    model_path = results_dir / "unet_sidd.pth"
-    if not model_path.exists():
-        raise click.ClickException(f"Model weights not found at {model_path}")
-    
-    device = torch.device(device_name)
-    if device_name == "xpu":
-        assert torch.xpu.is_available(), "XPU not available!"
-    
-    model = UNet().to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    model.eval()
-    print(f"Model loaded successfully")
-    
-    # Load test images
-    root = Path(dataset_path)
-    pairs = collect_sidd_pairs(root)
-    _, _, test_pairs = split_dataset(pairs)
-    
-    # Use test images, or fall back to all pairs if test set is small
-    if len(test_pairs) < num_images:
-        print(f"Warning: Only {len(test_pairs)} test images available, using all pairs")
-        test_pairs = pairs[:num_images]
-    else:
-        test_pairs = test_pairs[:num_images]
-    
-    print(f"Processing {len(test_pairs)} images...")
-    
-    # Prepare image processing
-    to_tensor = transforms.ToTensor()
-    
-    # Create PDF
-    pdf_path = results_dir / "test_results.pdf"
-    
+def load_tensor_png(image_path: str) -> Tuple[Image.Image, torch.Tensor]:
+    img = Image.open(image_path).convert("RGB")
+    return img, transforms.ToTensor()(img)
+
+NUM_TEST_IMAGES_SHOWN = 5
+
+def create_test_results(db: TrainingDB) -> None:
+    test_pairs = db.run.dataset_partition.test_set
+    pdf_path = db.get_resource_path("test_results.pdf")
+    patch_size = db.run.specification.patch_size
     with PdfPages(pdf_path) as pdf:
         # Process each image
         for img_idx, (noisy_path, clean_path) in enumerate(test_pairs):
-            print(f"Processing image {img_idx + 1}/{len(test_pairs)}: {noisy_path.name}")
+            print(f"Processing image {img_idx + 1}/{len(test_pairs)}: {noisy_path}")
             
-            # Load full images
-            noisy_img = Image.open(noisy_path).convert("RGB")
-            clean_img = Image.open(clean_path).convert("RGB")
+            noisy_img, noisy_tensor = load_tensor_png(noisy_path)
+            clean_img, clean_tensor = load_tensor_png(clean_path)
             
-            noisy_tensor = to_tensor(noisy_img)
-            clean_tensor = to_tensor(clean_img)
+            denoised_tensor = denoise_full_image(db.model, noisy_tensor, db.device, patch_size)
             
-            # Denoise full image
-            denoised_tensor = denoise_full_image(model, noisy_tensor, device, patch_size)
-            
-            # Extract center patches
             noisy_patch = extract_center_patch(noisy_tensor, patch_size)
             denoised_patch = extract_center_patch(denoised_tensor, patch_size)
             clean_patch = extract_center_patch(clean_tensor, patch_size)
@@ -201,8 +145,31 @@ def test_model(results_idx: Optional[int], num_images: int):
             pdf.savefig(fig, bbox_inches='tight')
             plt.close(fig)
     
-    print(f"\nTest results saved to: {pdf_path.absolute()}")
+    print(f"\nTest results saved to: {pdf_path}")
 
+@click.command()
+@click.option('--results_idx', type=int, default=None, help='Results directory index (default: latest)')
+def test_model(results_idx: Optional[int], num_images: int):
+    db = TrainingDB(results_idx)
+    spec = db.run.specification
+    
+    model_path = db.get_weights_path()
+    if not model_path.exists():
+        raise click.ClickException(f"Model weights not found at {model_path}")
+    
+    if spec.device == "xpu":
+        assert torch.xpu.is_available(), "XPU not available!"
+    
+    device = torch.device(spec.device)
+    model = UNet().to(device)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.eval()
+    print(f"Model loaded successfully")
+
+    test_pairs = db.run.dataset_partition.test_set
+    print(f"Processing {len(test_pairs)} images...")
+    
+    create_test_results(db)
 
 if __name__ == "__main__":
     test_model()

@@ -2,8 +2,6 @@
 from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
-import torch.nn as nn
-import torch.optim as optim
 import resource
 from typing import *
 import click
@@ -58,62 +56,32 @@ def main(resume: Optional[int]):
     hard_limit_memory_usage()
     db = TrainingDB(resume)
     spec = db.run.specification
+    dataset_partition = db.run.dataset_partition
 
-    root = Path(spec.dataset_path)
-
-    pairs = collect_sidd_pairs(root)
-    if spec.max_image_pairs is not None:
-        pairs = pairs[:spec.max_image_pairs]
-    
-    train_pairs, val_pairs, _ = split_dataset(pairs)
-
-    sample_noisy_path, sample_clean_path = pairs[0]
+    sample_noisy_path, sample_clean_path = dataset_partition.test_set[0]
     sample_noisy_patch = get_center_patch_from_image_path(sample_noisy_path, spec.patch_size)
     sample_clean_patch = get_center_patch_from_image_path(sample_clean_path, spec.patch_size)
 
-    train_ds = SIDDPatchDataset(train_pairs, spec.patch_size, spec.patches_per_image)
-    val_ds = SIDDPatchDataset(val_pairs, spec.patch_size, spec.patches_per_image)
+    train_ds = SIDDPatchDataset(dataset_partition.train_set, spec.patch_size, spec.patches_per_image)
+    val_ds = SIDDPatchDataset(dataset_partition.valid_set, spec.patch_size, spec.patches_per_image)
 
     train_loader = DataLoader(train_ds, batch_size=spec.batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=spec.batch_size)
 
-    device = torch.device(spec.device)
-    if spec.device == "xpu":
-        assert torch.xpu.is_available()
-
-    model = UNet().to(device)
-    
     # Load weights if resuming
     if resume is not None:
         model_path = db.get_weights_path()
         if model_path.exists():
-            model.load_state_dict(torch.load(model_path, map_location=device))
+            db.model.load_state_dict(torch.load(model_path, map_location=db.device))
             print(f"Loaded model weights from {model_path}")
         else:
             print(f"Warning: Model weights not found at {model_path}, starting with fresh weights")
     
-    # Set up loss function
-    
-    loss_functions = {
-        "L1Loss": nn.L1Loss,
-        "MSELoss": nn.MSELoss,
-    }
-    if not spec.loss_function in loss_functions:
-        raise ValueError(f"Unsupported loss function: {spec.loss_function} (add it to dict?)")
-    else:
-        criterion = loss_functions[spec.loss_function]()
-    
-    # Set up optimizer
-    if spec.optimizer == "Adam":
-        optimizer = optim.Adam(model.parameters(), lr=spec.learning_rate)
-    else:
-        raise ValueError(f"Unsupported optimizer: {spec.optimizer}")
-
     # Training loop
     for epoch in range(db.start_epoch, spec.epochs):
         epoch_start_time = time.time()
         
-        model.train()
+        db.model.train()
         train_loss = 0.0
         total_load_time = 0.0
         total_h2d_time = 0.0
@@ -123,14 +91,14 @@ def main(resume: Optional[int]):
         t0 = time.time()
         for noisy, clean in train_loader:
             t1 = time.time()
-            noisy, clean = noisy.to(device, non_blocking=True), clean.to(device, non_blocking=True)
+            noisy, clean = noisy.to(db.device, non_blocking=True), clean.to(db.device, non_blocking=True)
             t2 = time.time()
 
-            optimizer.zero_grad()
-            output = model(noisy)
-            loss = criterion(output, clean)
+            db.optimizer.zero_grad()
+            output = db.model(noisy)
+            loss = db.criterion(output, clean)
             loss.backward()
-            optimizer.step()
+            db.optimizer.step()
             train_loss += loss.item()
             t3 = time.time()
 
@@ -147,15 +115,15 @@ def main(resume: Optional[int]):
             t0 = time.time()
         train_time = time.time() - train_start_time
 
-        model.eval()
+        db.model.eval()
         val_loss = 0.0
         val_start_time = time.time()
         with torch.no_grad():
             for noisy, clean in val_loader:
-                noisy, clean = noisy.to(device, non_blocking=True), clean.to(device, non_blocking=True)
+                noisy, clean = noisy.to(db.device, non_blocking=True), clean.to(db.device, non_blocking=True)
 
-                output = model(noisy)
-                val_loss += criterion(output, clean).item()
+                output = db.model(noisy)
+                val_loss += db.criterion(output, clean).item()
         val_time = time.time() - val_start_time
 
         epoch_time = time.time() - epoch_start_time
@@ -170,10 +138,10 @@ def main(resume: Optional[int]):
             f"Val {avg_val_loss:.4f}"
         )
 
-        model.eval()
+        db.model.eval()
         with torch.no_grad():
-            sample_noisy_batch = sample_noisy_patch.unsqueeze(0).to(device)
-            sample_denoised_batch = model(sample_noisy_batch)
+            sample_noisy_batch = sample_noisy_patch.unsqueeze(0).to(db.device)
+            sample_denoised_batch = db.model(sample_noisy_batch)
             sample_denoised_patch = sample_denoised_batch.squeeze(0).cpu()
 
         save_image_tensor(sample_noisy_patch, db.get_resource_path(f"{epoch}_noisy.png"))
@@ -193,10 +161,10 @@ def main(resume: Optional[int]):
         ))
 
         if epoch % spec.checkpoint_frequency == 0:
-            db.save_checkpoint(model)
+            db.save_checkpoint(db.model)
             print(f"Checkpoint saved at epoch {epoch}")
 
-    db.save_checkpoint(model)
+    db.save_checkpoint(db.model)
     print(f"Training complete! Results saved.")
 
 if __name__ == "__main__":
