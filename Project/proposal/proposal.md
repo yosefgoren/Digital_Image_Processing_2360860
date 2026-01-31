@@ -1,4 +1,4 @@
-# Digital Image Processing 2360860 w25-26 - Project Proposal
+# Digital Image Processing w25-26 - Project Proposal
 - **Student Name:** Yosef Goren
 - **ID:** 211515606
 - **Email:** yosefgoren@campus.technion.ac.il
@@ -16,17 +16,15 @@ Therefore, we believe a key question in this domain is:
 **Q1: How/Should we adapt the Stable Diffusion architecture to fit image colorization?**
 
 ## Research Grounding Point
-As a reference point, we consider the paper:
+We consider the paper:
 
 **P1: Multimodal Semantic-Aware Automatic Colorization with Diffusion Prior (Wang et al., 2024).**
 
-This paper provides an image colorization solution (at inference time) which takes grayscale images and textual directions as input.
+It provides an image colorization solution (at inference time) which takes grayscale images and textual directions as input.
 For training, they use a pre-trained image generation diffusion model and fine-tune it with a tweaked architecture.
 The tweak introduces luminance conditioning in the reconstruction process by essentially concatenating the grayscale image to the intermediate result before each diffusion step.
 
-However, an important observation from this work is that **luminance is guided, not preserved by construction**. The diffusion process itself still uses standard Gaussian noise on latent representations that mix luminance and color, and luminance consistency is enforced indirectly through conditioning and decoder design.
-
-This raises a natural question:
+However, an important observation from this work is that **luminance is guided, not preserved by construction**. The diffusion process itself still uses latent representations that mix luminance and color, and luminance consistency is enforced indirectly through training. This raises the' question:
 
 **Q2: What happens if luminance is removed from the reconstruction process altogether?**
 
