@@ -13,20 +13,10 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from torchvision import transforms
 from PIL import Image
-import numpy as np
+from utils import *
 
 from models.unet import UNet
-from utils import collect_sidd_pairs, split_dataset
-from metrics import get_existing_results_dir, TrainingRun
-
-
-def save_image_tensor(tensor: torch.Tensor, path: Path):
-    """Save a tensor image to PNG file."""
-    to_pil = transforms.ToPILImage()
-    tensor = torch.clamp(tensor, 0, 1)
-    pil_image = to_pil(tensor.cpu())
-    pil_image.save(path)
-
+from metrics import get_existing_results_dir
 
 def denoise_full_image(model: nn.Module, noisy_tensor: torch.Tensor, device: torch.device, patch_size: int) -> torch.Tensor:
     """Denoise a full image by processing it in overlapping patches.

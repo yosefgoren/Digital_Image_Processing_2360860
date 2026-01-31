@@ -1,7 +1,16 @@
 from pathlib import Path
 from typing import List, Tuple
 import random
+import torch
+from torchvision import transforms
 
+def save_image_tensor(tensor: torch.Tensor, path: Path):
+    """Save a tensor image to PNG file."""
+    to_pil = transforms.ToPILImage()
+    tensor = torch.clamp(tensor, 0, 1)
+    pil_image = to_pil(tensor.cpu())
+    print(f"Saving image tensor to: {path.name}")
+    pil_image.save(path)
 
 def collect_sidd_pairs(root: Path) -> List[Tuple[Path, Path]]:
     pairs = []

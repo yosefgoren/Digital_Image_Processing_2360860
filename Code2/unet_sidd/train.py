@@ -9,20 +9,12 @@ from typing import *
 import click
 from datasets.sidd import SIDDPatchDataset
 from models.unet import UNet
-from utils import collect_sidd_pairs, split_dataset
+from utils import *
 from torchvision import transforms
 from PIL import Image
 import time
 from metrics import *
 import platform
-
-def save_image_tensor(tensor: torch.Tensor, path: Path):
-    """Save a tensor image to PNG file."""
-    to_pil = transforms.ToPILImage()
-    tensor = torch.clamp(tensor, 0, 1)
-    pil_image = to_pil(tensor.cpu())
-    print(f"Saving image tensor to: {path.name}")
-    pil_image.save(path)
 
 def hard_limit_memory_usage_linux():
     memory_limit_gb = 32
