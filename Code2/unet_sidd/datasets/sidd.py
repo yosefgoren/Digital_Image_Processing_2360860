@@ -45,7 +45,6 @@ class SIDDPatchDataset(Dataset):
         ys = list(range(0, h - ps + 1, ps))
 
         coords = [(x, y) for x in xs for y in ys]
-        random.shuffle(coords)
 
         patches = []
         for x, y in coords[: self.patches_per_image]:
