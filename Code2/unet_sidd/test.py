@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Test a trained model on full images."""
 
-from pathlib import Path
 import torch
 import torch.nn as nn
 import click
@@ -14,6 +13,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 from torchvision import transforms
 from PIL import Image
 from utils import *
+from datasets.sidd import SIDDPatchDataset
+from torch.utils.data import DataLoader
 
 from models.unet import UNet
 from metrics import *
@@ -86,13 +87,41 @@ def load_tensor_png(image_path: str) -> Tuple[Image.Image, torch.Tensor]:
     img = Image.open(image_path).convert("RGB")
     return img, transforms.ToTensor()(img)
 
-NUM_TEST_IMAGES_SHOWN = 5
+NUM_TEST_IMAGES_SHOWN = 3
 
-def create_test_results(db: TrainingDB) -> None:
+def create_test_results(db: TrainingDB, test_loss_values: list[float]) -> None:
     show_image_pairs = db.run.dataset_partition.test_set[:NUM_TEST_IMAGES_SHOWN]
     pdf_path = db.get_resource_path("test_results.pdf")
     patch_size = db.run.specification.patch_size
     with PdfPages(pdf_path) as pdf:
+        # ---- Page 1: Test loss summary ----
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+        x = range(1, len(test_loss_values) + 1)
+        mean_loss = sum(test_loss_values) / len(test_loss_values)
+
+        ax.plot(x, test_loss_values, marker='o', linewidth=2, label='Test Loss')
+        ax.axhline(mean_loss, linestyle='--', linewidth=2, label=f'Mean = {mean_loss:.4f}')
+
+        # Annotate mean value
+        ax.text(
+            0.99, mean_loss,
+            f'{mean_loss:.4f}',
+            transform=ax.get_yaxis_transform(),
+            ha='right', va='bottom',
+            fontsize=10, fontweight='bold'
+        )
+
+        ax.set_title('Test Loss Values', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Test Sample Index')
+        ax.set_ylabel('Loss')
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+
+        plt.tight_layout()
+        pdf.savefig(fig, bbox_inches='tight')
+        plt.close(fig)
+        
         # Process each image
         for img_idx, (noisy_path, clean_path) in enumerate(show_image_pairs):
             print(f"Processing image {img_idx + 1}/{len(show_image_pairs)}: {noisy_path}")
@@ -147,6 +176,22 @@ def create_test_results(db: TrainingDB) -> None:
     
     print(f"\nTest results saved to: {pdf_path}")
 
+def evaluate_model(db: TrainingDB) -> list[float]:
+    loss_values = []
+
+    spec = db.run.specification
+    test_ds = SIDDPatchDataset(db.run.dataset_partition.test_set, spec.patch_size, spec.patches_per_image)
+    test_loader = DataLoader(test_ds, batch_size=1, shuffle=False)
+    with torch.no_grad():
+        for noisy, clean in test_loader:
+            noisy, clean = noisy.to(db.device, non_blocking=True), clean.to(db.device, non_blocking=True)
+            output = db.model(noisy)
+            loss = db.criterion(output, clean)
+            loss_values.append(loss.item())
+    
+    assert len(loss_values) > 0
+    return loss_values
+
 @click.command()
 @click.option('--results_idx', type=int, default=None, help='Results directory index (default: latest)')
 def test_model(results_idx: Optional[int]):
@@ -169,7 +214,8 @@ def test_model(results_idx: Optional[int]):
     test_pairs = db.run.dataset_partition.test_set
     print(f"Processing {len(test_pairs)} images...")
     
-    create_test_results(db)
+    test_loss_values = evaluate_model(db)
+    create_test_results(db, test_loss_values)
 
 if __name__ == "__main__":
     test_model()
