@@ -1,4 +1,4 @@
-RESULTS_IDX?=6
+RESULTS_IDX?=18
 STUDENT_1_ID=214146896
 STUDENT_2_ID=211515606
 RESULTS_DIR=unet_sidd/results/$(RESULTS_IDX)
@@ -14,11 +14,8 @@ ATTACHED_SOURCE_FILES=./image_utils.py \
 	./style_transfer.py \
 	./unet_sidd/datasets/sidd.py \
 	./unet_sidd/generate_report.py \
-	./unet_sidd/metrics.py \
-	./unet_sidd/models/unet.py \
-	./unet_sidd/test.py \
-	./unet_sidd/train.py \
-	./unet_sidd/utils.py
+	./unet_sidd/q2_sol.py \
+	./unet_sidd/models/unet.py
 
 ATTACHED_AUX_FILES=./Makefile \
 	$(RESULTS_DIR)/unet_sidd.pth \

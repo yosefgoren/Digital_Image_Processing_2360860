@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from PIL import Image
 from typing import Optional
-from metrics import *
+from main import *
 
 
 @click.command()

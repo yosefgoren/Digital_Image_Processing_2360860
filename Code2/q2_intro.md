@@ -1,8 +1,7 @@
 # Question 2
 For our solution we created a simple unet implemenation (see `unet.py`) and used the small SRGB variant of the sidd dataset (see `sidd.py`).
 
-All of the source files relating to this question are provided.
-The core of the training code is at `train.py`.
+All of the solution code aside from the model and dataset implementations are within `q2_sol.py`
 The hyperparameters were specified by the `training_specification.json` file (not attached). Here is it's content:
 ```json
 {
