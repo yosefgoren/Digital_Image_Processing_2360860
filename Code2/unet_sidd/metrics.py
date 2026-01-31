@@ -13,10 +13,10 @@ class TrainingSpecification(BaseModel):
     optimizer: str = "Adam"
     loss_function: str = "L1Loss"
     model_type: str = "UNet"
-    device: str = "xpu"
+    device: str = "cuda"
     dataset_path: str
-    max_image_pairs: Optional[int] = None  # None means use all pairs
-    checkpoint_frequency: int = 1  # Save checkpoint every N epochs
+    max_image_pairs: Optional[int] = None  #None means use all pairs
+    checkpoint_frequency: int = 1  #Save checkpoint every N epochs
 
 
 class EpochMetrics(BaseModel):
@@ -107,7 +107,7 @@ def get_existing_results_dir(results_idx: Optional[int] = None) -> Path:
     return res
 
 def get_next_results_dir() -> Path:
-    results_dir = Path(f"{get_results_basedir()}" / f"{get_max_results_idx()+1}")
+    results_dir = Path(f"{get_results_basedir()}/{get_max_results_idx()+1}")
     results_dir.mkdir(exist_ok=True)
     return results_dir
 

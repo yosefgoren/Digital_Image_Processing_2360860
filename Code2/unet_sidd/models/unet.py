@@ -43,11 +43,10 @@ class UNet(nn.Module):
 
         self.out = nn.Conv2d(64, out_channels, 1, bias=True)
 
-        # Strongly recommended for residual denoising
         nn.init.zeros_(self.out.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        identity = x  # preserve color + low frequencies
+        identity = x  #preserve color + low frequencies
 
         d1 = self.down1(x)
         d2 = self.down2(self.pool1(d1))
@@ -61,5 +60,4 @@ class UNet(nn.Module):
 
         noise = self.out(u1)
 
-        # Residual output
         return identity - noise

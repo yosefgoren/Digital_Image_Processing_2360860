@@ -30,7 +30,7 @@ def hard_limit_memory_usage_linux():
     resource.setrlimit(resource.RLIMIT_AS, (memory_limit_bytes, memory_limit_bytes))
     print(f"Memory limit set to {memory_limit_gb}GB - process will be killed if exceeded")
     
-    oom_score_adj = 1000  # High priority for OOM killer (range: -1000 to 1000)
+    oom_score_adj = 1000  # high priority for OOM killer (range: -1000 to 1000)
     with open(f"/proc/self/oom_score_adj", "w") as f:
         f.write(str(oom_score_adj))
     print(f"OOM score adjusted to {oom_score_adj} (higher = more likely to be killed)")
@@ -82,12 +82,14 @@ def main(resume: Optional[int]):
     train_ds = SIDDPatchDataset(train_pairs, spec.patch_size, spec.patches_per_image)
     val_ds = SIDDPatchDataset(val_pairs, spec.patch_size, spec.patches_per_image)
 
-    train_loader = DataLoader(train_ds, batch_size=spec.batch_size, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=spec.batch_size)
+    train_loader = DataLoader(train_ds, batch_size=spec.batch_size, shuffle=True,num_workers=4,pin_memory=True,prefetch_factor=2)
+    val_loader = DataLoader(val_ds, batch_size=spec.batch_size,num_workers=2,pin_memory=True,prefetch_factor=2)
 
     device = torch.device(spec.device)
     if spec.device == "xpu":
         assert torch.xpu.is_available()
+    elif spec.device == "cuda":
+        assert torch.cuda.is_available()
 
     model = UNet().to(device)
     
@@ -100,7 +102,7 @@ def main(resume: Optional[int]):
         else:
             print(f"Warning: Model weights not found at {model_path}, starting with fresh weights")
     
-    # Set up loss function
+    #Set up loss function
     
     loss_functions = {
         "L1Loss": nn.L1Loss,
@@ -111,13 +113,13 @@ def main(resume: Optional[int]):
     else:
         criterion = loss_functions[spec.loss_function]()
     
-    # Set up optimizer
+    # set up optimizer
     if spec.optimizer == "Adam":
         optimizer = optim.Adam(model.parameters(), lr=spec.learning_rate)
     else:
         raise ValueError(f"Unsupported optimizer: {spec.optimizer}")
 
-    # Training loop
+    #training loop
     for epoch in range(db.start_epoch, spec.epochs):
         epoch_start_time = time.time()
         
@@ -159,7 +161,7 @@ def main(resume: Optional[int]):
         val_loss = 0.0
         val_start_time = time.time()
         with torch.no_grad():
-            for noisy, clean in val_loader:
+            for i,(noisy, clean) in enumerate(val_loader):
                 noisy, clean = noisy.to(device, non_blocking=True), clean.to(device, non_blocking=True)
 
                 output = model(noisy)
@@ -168,7 +170,7 @@ def main(resume: Optional[int]):
 
         epoch_time = time.time() - epoch_start_time
 
-        # Calculate average losses
+        #calculate average losses
         avg_train_loss = train_loss / len(train_loader)
         avg_val_loss = val_loss / len(val_loader)
 
@@ -189,7 +191,7 @@ def main(resume: Optional[int]):
         save_image_tensor(sample_clean_patch, db.get_resource_path(f"{epoch}_clean.png"))
 
         db.run.epochs.append(EpochMetrics(
-            epoch=epoch + 1,
+            epoch=epoch+1,
             train_loss=avg_train_loss,
             val_loss=avg_val_loss,
             epoch_time=epoch_time,

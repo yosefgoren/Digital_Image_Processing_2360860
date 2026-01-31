@@ -37,22 +37,22 @@ def denoise_full_image(model: nn.Module, noisy_tensor: torch.Tensor, device: tor
     original_shape = noisy_tensor.shape
     _, h, w = noisy_tensor.shape
     
-    # If image is smaller than patch_size, pad it
+    #If image is smaller than patch_size, pad it
     if h < patch_size or w < patch_size:
         pad_h = max(0, patch_size - h)
         pad_w = max(0, patch_size - w)
         noisy_tensor = torch.nn.functional.pad(noisy_tensor, (0, pad_w, 0, pad_h), mode='reflect')
         _, h, w = noisy_tensor.shape
     
-    # Create output tensor
+    #Create output tensor
     output = torch.zeros_like(noisy_tensor)
     count = torch.zeros_like(noisy_tensor)
     
-    # Sliding window with 50% overlap
+    #Sliding window with 50% overlap
     stride = patch_size // 2
     
     with torch.no_grad():
-        # Generate all patch positions
+        #Generate all patch positions
         y_positions = list(range(0, h - patch_size + 1, stride))
         x_positions = list(range(0, w - patch_size + 1, stride))
         
@@ -99,7 +99,7 @@ def test_model(results_idx: Optional[int], num_images: int):
     results_dir = get_existing_results_dir(results_idx)
     print(f"Loading model from: {results_dir}")
     
-    # Load training run to get specification
+    #Load training run to get specification
     metrics_file = results_dir / "metrics.json"
     if not metrics_file.exists():
         raise click.ClickException(f"Metrics file {metrics_file} does not exist!")
@@ -111,14 +111,14 @@ def test_model(results_idx: Optional[int], num_images: int):
         spec_dict = data['specification']
         patch_size = spec_dict['patch_size']
         dataset_path = spec_dict['dataset_path']
-        device_name = spec_dict.get('device', 'xpu')
+        device_name = spec_dict['device']
     else:
         raise click.ClickException("Could not find training specification in metrics.json")
     
     print(f"Patch size: {patch_size}")
     print(f"Dataset path: {dataset_path}")
     
-    # Load model weights
+    #Load model weights
     model_path = results_dir / "unet_sidd.pth"
     if not model_path.exists():
         raise click.ClickException(f"Model weights not found at {model_path}")
@@ -126,13 +126,15 @@ def test_model(results_idx: Optional[int], num_images: int):
     device = torch.device(device_name)
     if device_name == "xpu":
         assert torch.xpu.is_available(), "XPU not available!"
+    elif device_name == "cuda":
+        assert torch.cuda.is_available(), "Cuda not available!"
     
     model = UNet().to(device)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
     print(f"Model loaded successfully")
     
-    # Load test images
+    #Load test images
     root = Path(dataset_path)
     pairs = collect_sidd_pairs(root)
     _, _, test_pairs = split_dataset(pairs)
@@ -149,7 +151,7 @@ def test_model(results_idx: Optional[int], num_images: int):
     # Prepare image processing
     to_tensor = transforms.ToTensor()
     
-    # Create PDF
+    #Create PDF
     pdf_path = results_dir / "test_results.pdf"
     
     with PdfPages(pdf_path) as pdf:
@@ -157,30 +159,22 @@ def test_model(results_idx: Optional[int], num_images: int):
         for img_idx, (noisy_path, clean_path) in enumerate(test_pairs):
             print(f"Processing image {img_idx + 1}/{len(test_pairs)}: {noisy_path.name}")
             
-            # Load full images
+            #Load full images
             noisy_img = Image.open(noisy_path).convert("RGB")
             clean_img = Image.open(clean_path).convert("RGB")
             
             noisy_tensor = to_tensor(noisy_img)
             clean_tensor = to_tensor(clean_img)
             
-            # Denoise full image
+            #Denoise full image
             denoised_tensor = denoise_full_image(model, noisy_tensor, device, patch_size)
-            
-            # Extract center patches
             noisy_patch = extract_center_patch(noisy_tensor, patch_size)
             denoised_patch = extract_center_patch(denoised_tensor, patch_size)
             clean_patch = extract_center_patch(clean_tensor, patch_size)
-            
-            # Create figure with 2 rows: full images and patches
             fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-            
-            # Row 1: Full images
             axes[0, 0].imshow(noisy_img)
             axes[0, 0].set_title(f'Image {img_idx + 1} - Noisy (Full)', fontsize=12, fontweight='bold')
             axes[0, 0].axis('off')
-            
-            # Convert denoised tensor to PIL for display
             denoised_pil = transforms.ToPILImage()(torch.clamp(denoised_tensor, 0, 1))
             axes[0, 1].imshow(denoised_pil)
             axes[0, 1].set_title(f'Image {img_idx + 1} - Denoised (Full)', fontsize=12, fontweight='bold')
@@ -189,23 +183,18 @@ def test_model(results_idx: Optional[int], num_images: int):
             axes[0, 2].imshow(clean_img)
             axes[0, 2].set_title(f'Image {img_idx + 1} - Clean (Full)', fontsize=12, fontweight='bold')
             axes[0, 2].axis('off')
-            
-            # Row 2: Center patches
             noisy_patch_pil = transforms.ToPILImage()(torch.clamp(noisy_patch, 0, 1))
             axes[1, 0].imshow(noisy_patch_pil)
             axes[1, 0].set_title(f'Image {img_idx + 1} - Noisy (Center Patch)', fontsize=12, fontweight='bold')
             axes[1, 0].axis('off')
-            
             denoised_patch_pil = transforms.ToPILImage()(torch.clamp(denoised_patch, 0, 1))
             axes[1, 1].imshow(denoised_patch_pil)
             axes[1, 1].set_title(f'Image {img_idx + 1} - Denoised (Center Patch)', fontsize=12, fontweight='bold')
             axes[1, 1].axis('off')
-            
             clean_patch_pil = transforms.ToPILImage()(torch.clamp(clean_patch, 0, 1))
             axes[1, 2].imshow(clean_patch_pil)
             axes[1, 2].set_title(f'Image {img_idx + 1} - Clean (Center Patch)', fontsize=12, fontweight='bold')
             axes[1, 2].axis('off')
-            
             plt.suptitle(f'Test Results - Image {img_idx + 1}', fontsize=14, fontweight='bold', y=0.98)
             plt.tight_layout(rect=[0, 0, 1, 0.96])
             pdf.savefig(fig, bbox_inches='tight')
