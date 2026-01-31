@@ -6,6 +6,7 @@ from utils import *
 import torch.nn as nn
 from models import unet
 import torch.optim as optim
+import enum
 
 class TrainingSpecification(BaseModel):
     patch_size: int
@@ -42,6 +43,10 @@ class TrainingRun(BaseModel):
     specification: TrainingSpecification
     dataset_partition: DatasetPartition
     epochs: list[EpochMetrics] = []
+
+class OpenResultsMode(enum.Enum):
+    NEW = "new"
+    LAST = "last"
 
 class TrainingDB:
     def _load_training_spec(self) -> TrainingSpecification:
@@ -90,36 +95,43 @@ class TrainingDB:
         else:
             raise ValueError(f"Unsupported optimizer: {spec.optimizer}")
 
+    def _init_from_existing_run_idx(self, run_idx: int) -> None:
+        print(f"Continuing training of run: {run_idx}")
+        self._results_dir = get_existing_results_dir(run_idx)            
+        self.run = self._load_previous_training_run()
+        self.start_epoch = max([0, len(self.run.epochs)])
 
-    def __init__(self, run_idx: int | None):
-        if run_idx is not None:
-            print(f"Continuing training of run: {run_idx}")
+    def _init_new_run(self) -> None:
+        spec = self._load_training_spec()
+        print(f"Starting new training with specification: {spec.model_dump_json(indent=2)}")
 
-            self._results_dir = get_existing_results_dir(run_idx)            
-            self.run = self._load_previous_training_run()
-            self.start_epoch = max([0, len(self.run.epochs)])
-
-            if self.start_epoch >= self.run.specification.epochs:
-                raise RuntimeError(f"Training already complete! All {self.run.specification.epochs} epochs have been completed.")
-        else:
-            spec = self._load_training_spec()
-            print(f"Starting new training with specification: {spec.model_dump_json(indent=2)}")
-
-            pairs = collect_sidd_pairs(Path(spec.dataset_path))
-            if spec.max_image_pairs is not None:
-                pairs = pairs[:spec.max_image_pairs]
-            train_pairs, valid_pairs, test_pairs = split_dataset(pairs)
-            
-            self._results_dir = get_next_results_dir()
-            self.run = TrainingRun(
-                specification=spec,
-                dataset_partition=DatasetPartition(
-                    train_set=train_pairs,
-                    valid_set=valid_pairs,
-                    test_set=test_pairs
-                )
+        pairs = collect_sidd_pairs(Path(spec.dataset_path))
+        if spec.max_image_pairs is not None:
+            pairs = pairs[:spec.max_image_pairs]
+        train_pairs, valid_pairs, test_pairs = split_dataset(pairs)
+        
+        self._results_dir = get_next_results_dir()
+        self.run = TrainingRun(
+            specification=spec,
+            dataset_partition=DatasetPartition(
+                train_set=train_pairs,
+                valid_set=valid_pairs,
+                test_set=test_pairs
             )
-            self.start_epoch = 0
+        )
+        self.start_epoch = 0
+
+    def __init__(self, run_spec: int | OpenResultsMode):
+        if isinstance(run_spec, int):
+            self._init_from_existing_run_idx(run_spec)
+        else:
+            if run_spec == OpenResultsMode.NEW:
+                self._init_new_run()
+            elif run_spec == OpenResultsMode.LAST:
+                last_idx = get_max_results_idx(False)
+                self._init_from_existing_run_idx(last_idx)
+            else:
+                raise RuntimeError(f"run specification: {run_spec}")
 
         self._init_device()
         self._init_model()
@@ -144,10 +156,14 @@ class TrainingDB:
 def get_results_basedir() -> str:
     return "./results"
 
-def get_max_results_idx() -> int:
+def get_max_results_idx(zero_if_empty: bool = True) -> int:
     results_base = Path(get_results_basedir())
     results_base.mkdir(exist_ok=True)
-    return max([0] + [int(entry.name) for entry in results_base.iterdir() if entry.name.isdecimal()])
+    options = [int(entry.name) for entry in results_base.iterdir() if entry.name.isdecimal()]
+    if not zero_if_empty and len(options) == 0:
+        raise RuntimeError(f"Expected to have at-least 1 results dir but found none.")
+        
+    return max(options)
 
 def get_existing_results_dir(results_idx: int | None = None) -> Path:
     if results_idx is None:

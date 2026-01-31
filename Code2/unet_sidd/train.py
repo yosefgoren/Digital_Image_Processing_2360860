@@ -54,7 +54,7 @@ def get_center_patch_from_image_path(path: Path, patch_size: int) -> torch.Tenso
 @click.option('--resume', type=int, default=None, help='Resume training from results directory with this index')
 def main(resume: Optional[int]):
     hard_limit_memory_usage()
-    db = TrainingDB(resume)
+    db = TrainingDB(OpenResultsMode.NEW if resume is None else resume)
     spec = db.run.specification
     dataset_partition = db.run.dataset_partition
 

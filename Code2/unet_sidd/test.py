@@ -89,13 +89,13 @@ def load_tensor_png(image_path: str) -> Tuple[Image.Image, torch.Tensor]:
 NUM_TEST_IMAGES_SHOWN = 5
 
 def create_test_results(db: TrainingDB) -> None:
-    test_pairs = db.run.dataset_partition.test_set
+    show_image_pairs = db.run.dataset_partition.test_set[:NUM_TEST_IMAGES_SHOWN]
     pdf_path = db.get_resource_path("test_results.pdf")
     patch_size = db.run.specification.patch_size
     with PdfPages(pdf_path) as pdf:
         # Process each image
-        for img_idx, (noisy_path, clean_path) in enumerate(test_pairs):
-            print(f"Processing image {img_idx + 1}/{len(test_pairs)}: {noisy_path}")
+        for img_idx, (noisy_path, clean_path) in enumerate(show_image_pairs):
+            print(f"Processing image {img_idx + 1}/{len(show_image_pairs)}: {noisy_path}")
             
             noisy_img, noisy_tensor = load_tensor_png(noisy_path)
             clean_img, clean_tensor = load_tensor_png(clean_path)
@@ -149,8 +149,8 @@ def create_test_results(db: TrainingDB) -> None:
 
 @click.command()
 @click.option('--results_idx', type=int, default=None, help='Results directory index (default: latest)')
-def test_model(results_idx: Optional[int], num_images: int):
-    db = TrainingDB(results_idx)
+def test_model(results_idx: Optional[int]):
+    db = TrainingDB(OpenResultsMode.LAST if results_idx is None else results_idx)
     spec = db.run.specification
     
     model_path = db.get_weights_path()
